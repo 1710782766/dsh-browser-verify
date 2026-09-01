@@ -1,0 +1,17 @@
+# dsh-browser-verify bundle patch: inserts the four browser verification
+# tools into the web profile roster. Applied as a profile bundle layer (the
+# dsh.bundle.patch manifest field).
+#
+# Install (from a source checkout; tarball name follows the current version):
+#   pnpm install && pnpm build && pnpm pack
+#   dsh plugin --profile web add ./dsh-browser-verify-<version>.tgz
+#   # or, during development, add the checkout directory directly (pnpm link):
+#   dsh plugin --profile web add <path-to-this-directory>
+#
+# Host half only: the node half (exports ".") registers browser_open /
+# browser_mock / browser_assert / browser_screenshot. No client half, no
+# settings card. Configuration is env-var only (DSH_BROWSER_VERIFY_*); do NOT
+# add a `config:` block here.
+- insert:
+    - id: browser-verify
+      name: 'dsh-browser-verify'
