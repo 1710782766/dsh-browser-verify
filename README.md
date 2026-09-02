@@ -54,25 +54,19 @@ a screenshot is for when the rendering itself must be judged.
 
 ## Real model experience
 
-> **"Pleasant to use, cleanly layered."** — a real model's verdict, verbatim,
-> after verifying a production uni-app H5 payment page in three states
-> (real / empty / with data):
+> **"Pleasant to use, cleanly layered."** — a real model's verdict, after
+> putting the four tools to work on a real business page.
 
-- **4–5 tool calls, zero environment setup** — the same verification used to
-  take ~20 manual script steps.
-- **Mock then auto-reload** — the classic manual-script trap ("same URL, no
-  re-navigation, identical screenshot") is gone by design.
-- **Screenshots auto-project into the model's context** — no `read_image` path
-  hunting.
-- **Structured asserts** (count / text / elapsed) that warn
-  `identicalToPrevious:true` when the page probably did not refresh.
-- **Every `browser_open` starts a fresh scenario and resets mocks** — states
-  never bleed into each other.
+- **A three-state verification in 4–5 tool calls, zero environment setup** —
+  the same job used to take ~20 manual script steps.
+- **Mock, then it reloads itself** — no more "same URL, screenshot unchanged"
+  traps.
+- **Screenshots land right in the model's context** — no file paths to chase.
+- **Structured asserts** (count / text / elapsed) that even warn you when the
+  page didn't actually refresh.
+- **Every open resets the world** — states never bleed into each other.
 
-The pilot's two polish points are fixed in **0.1.3**: without `waitSelector`,
-`browser_open` now waits for the render to settle before snapshotting (no more
-early boot frames), and loading-state text like `加载中...` is filtered out of
-the summary. Feedback drives the roadmap.
+Verification should be a few tool calls, not script choreography.
 
 ### Worked example — two states, six calls
 
