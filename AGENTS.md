@@ -71,6 +71,15 @@ DeepSeek Harness 宿主插件：给模型四件只读浏览器验证工具（`br
   typecheck 验证契约（注意：defineTool 的 `parameters` 是**编译后 JSON Schema**、
   `output.render` 为必填——rc.8 起；新增参数节点必须带显式 `type` 与
   `additionalProperties`，否则 defineTool 注册即抛错）。
+- **运行时 import 的宿主包必须同时声明在 peerDependencies 与
+  devDependencies**（对照生态 dsh-context / dshmarket：dependencies 只放
+  第三方，`@deepseek-ai/*` 一律 peer；0.1.1 的教训——只放 devDependencies，
+  靠 `~/.dsh/profiles/node_modules` 共享层侥幸可解析，宿主升级时失去版本
+  约束且无 peer 报警）。
+- **用户可读文件（README ×2、cordis.patch.yml 注释）禁写开发者向指引**：
+  不写 git 直装、不写 `add ./tgz` / `add <path>` 本地路径安装（0.1.1 时
+  README 安装节与 patch 注释里都泄漏过此类内容）；本地构建安装只在
+  Development 节出现（贡献者视角）。
 - `engines`: node ^22.19.0 || >=24.0.0；dsh >=0.1.2-alpha.1。
 
 ## 配置纪律（改默认值需同步）
@@ -106,9 +115,12 @@ DeepSeek Harness 宿主插件：给模型四件只读浏览器验证工具（`br
    内 lib 是旧的）。
 2. 版本号三处同步：package.json `version`、README ×2 安装钉扎命令、
    git tag。
-3. 发布后验证：`dsh plugin --profile web add dsh-browser-verify@<version>`
+3. 发布前核对包声明与文档：运行时 import 的宿主包在 peerDependencies +
+   devDependencies；README ×2 安装节只含 registry 安装；cordis.patch.yml
+   注释为用户向（无 git / 本地路径安装指引）。
+4. 发布后验证：`dsh plugin --profile web add dsh-browser-verify@<version>`
    安装成功 + `--dump-config` 出现 `# == dsh-browser-verify` 层。
-4. GitHub：topics 必含 `dsh-plugin`（生态抓取靠它），description 保持一句
+5. GitHub：topics 必含 `dsh-plugin`（生态抓取靠它），description 保持一句
    定位话；给 Release 附变更摘要。
 
 **安装路径事实（写文档/注释时不许再写错）**：

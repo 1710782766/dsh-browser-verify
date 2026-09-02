@@ -18,7 +18,7 @@ verification is just tool calls.
 ## Quick start
 
 ```sh
-dsh plugin --profile web add dsh-browser-verify@0.1.1
+dsh plugin --profile web add dsh-browser-verify@0.1.2
 ```
 
 1. **Install** with the command above (or see [Install](#install)).
@@ -69,7 +69,7 @@ browser_screenshot
 ## Install
 
 ```sh
-dsh plugin --profile web add dsh-browser-verify@0.1.1
+dsh plugin --profile web add dsh-browser-verify@0.1.2
 ```
 
 The version is pinned on purpose: pnpm 11 holds back packages published in the
@@ -91,17 +91,6 @@ npx playwright install chromium     # needs playwright-core@1.62.0
 or point the plugin at an existing binary via `DSH_BROWSER_VERIFY_CHROMIUM`
 (see [Environment variables](#environment-variables)). Without either, the
 first `browser_open` fails with an actionable install hint.
-
-### From a source checkout
-
-```sh
-pnpm install && pnpm build && pnpm pack     # → dsh-browser-verify-<version>.tgz
-dsh plugin --profile web add ./dsh-browser-verify-<version>.tgz
-# or: dsh plugin --profile web add /path/to/dsh-browser-verify   (build first — lib/ is gitignored)
-```
-
-The tarball ships a prebuilt `lib/`, so no build step runs on the installing
-machine.
 
 ## Environment variables
 
@@ -162,6 +151,11 @@ scripts/smoke.sh      # two-state end-to-end; requires the reference app dev ser
 CLI (harness-free debug path): `node lib/cli.js --url <u> [--mock <file.json>]
 [--wait-selector <sel>] [--assert <sel>] [--screenshot] [--persist <dir>]
 [--viewport <WxH>]`.
+
+Contributors can install the local build with
+`dsh plugin --profile web add ./dsh-browser-verify-<version>.tgz` after
+`pnpm build`; the tarball ships a prebuilt `lib/`, so no build step runs on
+the installing machine.
 
 ## License & attribution
 

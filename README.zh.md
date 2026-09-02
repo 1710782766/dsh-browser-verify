@@ -12,7 +12,7 @@
 ## 快速上手
 
 ```sh
-dsh plugin --profile web add dsh-browser-verify@0.1.1
+dsh plugin --profile web add dsh-browser-verify@0.1.2
 ```
 
 1. **安装**（更多方式见 [安装](#安装)）。
@@ -61,7 +61,7 @@ browser_screenshot
 ## 安装
 
 ```sh
-dsh plugin --profile web add dsh-browser-verify@0.1.1
+dsh plugin --profile web add dsh-browser-verify@0.1.2
 ```
 
 版本故意钉死：pnpm 11 会暂缓 24 小时内新发布的包，裸写 `add
@@ -80,16 +80,6 @@ npx playwright install chromium     # 需要 playwright-core@1.62.0
 
 或通过 `DSH_BROWSER_VERIFY_CHROMIUM` 指向已有二进制（见
 [环境变量](#环境变量)）。两者都没有时，第一次 `browser_open` 会给出可操作的安装提示。
-
-### 源码 checkout 安装
-
-```sh
-pnpm install && pnpm build && pnpm pack     # → dsh-browser-verify-<version>.tgz
-dsh plugin --profile web add ./dsh-browser-verify-<version>.tgz
-# 或：dsh plugin --profile web add /path/to/dsh-browser-verify  （需先 build——lib/ 不入库）
-```
-
-tgz 内已含预构建 `lib/`，安装机无需再构建。
 
 ## 环境变量
 
@@ -136,6 +126,10 @@ scripts/smoke.sh      # 两态端到端；需要参考应用 dev server 在 :517
 CLI（免 harness 的调试路径）：`node lib/cli.js --url <u> [--mock <file.json>]
 [--wait-selector <sel>] [--assert <sel>] [--screenshot] [--persist <dir>]
 [--viewport <WxH>]`。
+
+贡献者可本地构建后安装：`pnpm build` 后
+`dsh plugin --profile web add ./dsh-browser-verify-<version>.tgz`——tgz 内已含
+预构建 `lib/`，安装机无需再构建。
 
 ## 许可与署名
 
