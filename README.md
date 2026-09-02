@@ -52,6 +52,28 @@ state?"; add `browser_screenshot` when you need to see the layout, or
 Use `browser_assert` before `browser_screenshot`: an assertion is cheaper, and
 a screenshot is for when the rendering itself must be judged.
 
+## Real model experience
+
+> **"Pleasant to use, cleanly layered."** — a real model's verdict, verbatim,
+> after verifying a production uni-app H5 payment page in three states
+> (real / empty / with data):
+
+- **4–5 tool calls, zero environment setup** — the same verification used to
+  take ~20 manual script steps.
+- **Mock then auto-reload** — the classic manual-script trap ("same URL, no
+  re-navigation, identical screenshot") is gone by design.
+- **Screenshots auto-project into the model's context** — no `read_image` path
+  hunting.
+- **Structured asserts** (count / text / elapsed) that warn
+  `identicalToPrevious:true` when the page probably did not refresh.
+- **Every `browser_open` starts a fresh scenario and resets mocks** — states
+  never bleed into each other.
+
+The pilot's two polish points are fixed in **0.1.3**: without `waitSelector`,
+`browser_open` now waits for the render to settle before snapshotting (no more
+early boot frames), and loading-state text like `加载中...` is filtered out of
+the summary. Feedback drives the roadmap.
+
 ### Worked example — two states, six calls
 
 The typical verification (empty state + normal state) is 6 calls:
