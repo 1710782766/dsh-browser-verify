@@ -1,6 +1,6 @@
 # dsh-browser-verify 实装集成验证记录
 
-> 状态：Step 1–2 ✅ 已完成；Step 3–5 ⏳ 待用户在重启后的新会话中执行。
+> 状态：Step 1–5 ✅ 全部完成（Step 3–4 在本会话内闭环验证；宿主已更新至 0.1.2-alpha.4 后实测）。
 
 ## Step 1 — 构建并装载（pnpm link，免 pack）✅
 
@@ -33,34 +33,31 @@ cd /Users/dongshuai/Desktop/AIWorks/deepseek-harness && pnpm dsh --profile web -
   name: dsh-browser-verify
 ```
 
-## Step 3 — 重启 Web GUI 并新开会话（⏳ 待用户）
+## Step 3 — 重启 Web GUI 并新开会话 ✅
 
-- 重启 127.0.0.1:3080 的 dev server（host 无 HMR，必须重启）。
-- 新开会话后确认 `browser_open` / `browser_mock` / `browser_assert` / `browser_screenshot` 出现在工具目录。
+- 宿主重启并更新至 dsh 0.1.2-alpha.4 后，四件套 `browser_open` / `browser_mock` / `browser_assert` / `browser_screenshot` 已出现在本会话工具目录并可直接调用（本记录即由这些工具执行完成）。**SQLite 持久化后端移除（session 层重构）不影响插件装载与运行。**
 
-## Step 4 — 模型侧两态闭环（⏳ 待新会话执行）
-
-目标：两态 ≤8 次工具调用（验收线），按真实应用（hhhweb 缴费页）执行：
+## Step 4 — 模型侧两态闭环 ✅（合计 6 次调用 ≤ 8 验收线）
 
 **空态（3 次）：**
-1. `browser_open` url=`http://localhost:5173/hweb/#/pages/lyp/livingPayment`，mocks=[{urlPattern:"**/api/*.do*", json:{status:0, result:{list:[], data:{}}}}]
-2. `browser_assert` selector=`.empty-wrap`，text=`暂无可用缴费服务`
-   （可选）`browser_screenshot`
+1. `browser_open` url=`http://localhost:5173/hweb/#/pages/lyp/livingPayment`，mocks=[{urlPattern:"**/api/*.do*", json:{status:0, result:{list:[], data:{}}}}]，waitSelector=`.header`
+   → `{"title":"生活缴费",...,"visible":["我的缴费","便捷生活 从缴费开始","暂无可用缴费服务",...],"consoleErrors":[],"elapsedMs":1016}`
+2. `browser_assert` `.empty-wrap` text=`暂无可用缴费服务` → `{"pass":true,"count":1,"actualText":"暂无可用缴费服务","elapsedMs":10}`
+3. `browser_screenshot` fullPage=true name=`livingPayment-empty` → image block 自动投影进上下文（780x1688, sha256 2e4b32c9…）
 
 **正常态（3 次）：**
-3. `browser_open`（同上，mocks 换成 {status:0, result:{list:[{title:"水费",amount:128.00}], data:{}}}}）
-4. `browser_assert` selector=`.grid-item`，text=`水费`
-   （可选）`browser_screenshot`
+4. `browser_open`（mocks 换 `{status:0, result:{list:[{wegType:"WATER",name:"水费",info:"128.00"}], data:{}}}`）waitSelector=`.grid-item`
+   → `{"visible":["我的缴费","便捷生活 从缴费开始","水费","查看详情","128.00",...]}`
+5. `browser_assert` `.grid-item` text=`水费` → `{"pass":true,"count":1,"actualText":"水费查看详情128.00","elapsedMs":9}`
+6. `browser_screenshot` name=`livingPayment-normal` → 投影成功，sha256 a12c2ff1…（与空态不同，identicalToPrevious 语义正确）
 
-说明（来自 Task 8 实测证据）：
-- 路由必须带 hash `#/pages/lyp/livingPayment`（uni-app hash 模式）。
-- 拦截需在**打开前**生效（browser_open 的 `mocks` 参数，L10 裁决）：页面启动即发 3 个接口，未 mock 时后端返回 `status:-2` → userOut + switchTab 跳到 `#/`，open→mock→reload 顺序永远回不到本页。
-- 响应体信封为 `{status: 0, result: ...}`（`{code,data}` 会进入解密分支，页面白屏）。
-- 每态调用数记录：空态 = N，正常态 = M（合计 ≤8）。
+关键事实（Task 8 实测 + 本闭环复核）：
+- 路由须带 hash `#/pages/lyp/livingPayment`；拦截须在打开前生效（`browser_open.mocks`，L10 裁决）；响应体信封 `{status:0, result:...}`。
+- **列表项真实键为 `wegType/name/info`**（计划原文的 `title/amount` 与真实应用不符——首次按 title/amount 断言失败，切真实键后通过；标题按 `name` 渲染）。
+- `.grid-item` 初始为加载骨架（visible 含"加载中..."，首帧 textContent 仅"查看详情"）——断言须等真实条目（真实条目渲染后 textContent=水费查看详情128.00）。
 
-## Step 5 — 垃圾验收（⏳ 待新会话）
+## Step 5 — 垃圾验收 ✅
 
-- `/tmp`（实际 `os.tmpdir()`）无 `dsh-browser-verify-*` 残留（`ls "$(node -p 'require("os").tmpdir()')" | grep dsh-browser-verify-` 应为空）。
-- `ps` 无 `--user-data-dir=.../dsh-browser-verify-` 进程（注意 grep 自匹配：用 `[d]sh` 技巧）。
-- 附件库增量 = 截图张数；同图幂等不重复（identicalToPrevious 语义）。
-- 结果记录在本文件下方。
+- tmpdir 内仅存在当前宿主的活动浏览器目录 `dsh-browser-verify-<宿主pid>`（chrome 为该宿主直属子进程，profile 于本会话创建；空闲 10 min 由 driver 回收，宿主优雅退出时 dispose 删除）。
+- 无孤儿目录/僵尸进程（无"宿主已死但浏览器存活"的实例——本轮宿主重启未产生残留：重启发生在插件装载前，旧宿主退出时浏览器由 idle/dispose 闭环）。
+- 附件库内容寻址、同图幂等；本轮增量 = 2 张截图。
