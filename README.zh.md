@@ -1,110 +1,142 @@
 # dsh-browser-verify
 
-面向 DeepSeek Harness Web GUI 的只读浏览器验证工具——**≤4 次工具调用**即可验证一个页面（H5/桌面），覆盖 mock 拦截、DOM 断言、截图自动投影进模型上下文。如果你的验证场景能被以下四件套覆盖，本插件相比临时搭建验证工具链（装浏览器、探测缓存、写场景脚本、人工读图）大约 4 次调用对 ~20 个步骤。
+[English](README.md) | 中文
 
-- **工具面**：`browser_open` / `browser_mock` / `browser_assert` / `browser_screenshot`
-- **范围**：仅只读验证（无点击/输入/滚动）。通过 `playwright-core` 驱动无头 Chromium（插件侧不下载浏览器）。
-- **许可证**：Apache-2.0
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D22-blue.svg)](package.json)
 
-## 安装
+**给你的 DeepSeek Harness 一双看网页的眼睛** —— 只读浏览器验证，≤4 次工具调用完成：打开、mock、断言、截图。
 
-> 插件在 harness 进程内运行，安装目标是 harness profile；`dsh plugin` 命令在 harness checkout 下执行。
-
-### 从打包 tgz 安装（本地/私有使用推荐）
-
-```bash
-pnpm install && pnpm build && pnpm pack     # → dsh-browser-verify-<版本号>.tgz
-dsh plugin --profile web add ./dsh-browser-verify-<版本号>.tgz
-```
-
-### 从目录 link 安装（开发调试）
-
-```bash
-pnpm build                                  # lib/ 被 gitignore——先构建
-dsh plugin --profile web add /路径/dsh-browser-verify
-```
-
-### 从 git URL 安装（git+https）
-
-pnpm 安装 git 依赖时先克隆仓库再执行其 `prepare` 脚本：因此远端仓库必须定义 `prepare`（构建 `lib/`），且目标 profile 必须在 `pnpm-workspace.yaml` 的 `allowBuilds` 中放行该构建脚本。本仓库已验证的安装路径为上述 tgz 与目录 link 两种。
-
-安装后重启 harness GUI、新开会话，四个工具即出现在工具目录中。
+每天都在变的页面（H5 轮播、缴费流程、后台控制台）很难靠肉眼验证。本插件让模型通过四个工具驱动一个真实的无头浏览器——打开页面、拦截接口、断言 DOM、截图——截图自动以图片块形式回到模型上下文。不需要终端脚本，不需要打理浏览器：一次验证就是几次工具调用。
 
 ## 快速上手
 
-```text
+```sh
+dsh plugin --profile web add dsh-browser-verify@0.1.1
+```
+
+1. **安装**（更多方式见 [安装](#安装)）。
+2. **重启 GUI 一次**——插件在启动时加载，四个工具要在重启后才可见。
+3. **新开会话**，告诉模型——或直接调用：
+
+```
 browser_open  url="http://localhost:5173/hweb/#/pages/lyp/livingPayment" waitSelector=".header"
-        在新场景中打开页面（无头 Chromium，默认视口 390×844 @2x），返回标题/状态码/可见文本/
-        console 错误。对于启动即依赖接口数据的页面，可在此传 mocks 在首次导航前完成拦截。
+        打开页面（全新无头会话），返回 title / HTTP status / 可见文本摘要 / console 错误。
+
+browser_assert  selector=".empty-wrap" text="暂无可用缴费服务"
+        等待选择器（默认 5s），返回 {pass, count, actualText, elapsedMs}。
+        未命中是正常的 pass:false，而不是抛错。
 ```
 
-```text
-browser_mock  urlPattern="**/api/*.do*" json={status:0,result:{list:[],data:{}}} status=200
-        注册 playwright glob 路由拦截并自动 reload 当前页，展示 mock 后的状态。pattern 重复会
-        报错：请 browser_open 重开场景，或换一个 urlPattern。
+这就是整个闭环——两次调用回答"页面是否显示了空态？"；需要看版式再加
+`browser_screenshot`，页面启动依赖 mock 接口就先 `browser_mock`（或直接在
+`browser_open` 传内联 `mocks`，见下文）。
+
+## 它做什么
+
+| 工具 | 用途 |
+|---|---|
+| `browser_open` | 在全新场景中打开 URL（无头 Chromium，默认视口 390×844 @2x），返回 title / HTTP 状态 / 可见文本摘要 / console 错误。可选 `waitSelector` 等待关键元素出现后再返回；可选内联 `mocks` 在**首次导航前**拦截接口——用于一启动就依赖 mock 数据的页面。 |
+| `browser_mock` | 注册 playwright glob 路由（如 `**/api/*.do*`）返回指定 JSON，并自动 reload 页面展示 mock 状态——不碰后端最快验证空态/异常态。重复 pattern 会提示报错。 |
+| `browser_assert` | 最省 token 也最精确的验证：等待 CSS 选择器出现，校验数量与包含文本，返回 `{pass, count, actualText, elapsedMs}`。不满足时返回 `pass:false`（附差异），**绝不抛错**——失败是一等公民的结果，而不是要调试的异常。 |
+| `browser_screenshot` | 截取当前页面（视口或整页），**自动以 image block 投影到模型上下文**——模型直接"看见"版式，无需任何文件处理。返回尺寸、sha256；与上一张完全一致时 `identicalToPrevious:true`（疑似页面未刷新）。 |
+
+先 `browser_assert` 再 `browser_screenshot`：断言更便宜，截图留给必须判断
+渲染效果的时刻。
+
+### 完整示例——两态六次调用
+
+典型验证（空态 + 正常态）只需 6 次调用：
+
+```
+browser_open  url="…/livingPayment" mocks=[{urlPattern:"**/api/*.do*", json:{status:0,result:{list:[],data:{}}}}] waitSelector=".header"
+browser_assert  selector=".empty-wrap"  text="暂无可用缴费服务"
+browser_screenshot
+
+browser_open  …（同 url，mocks 换成一条 {wegType:"WATER",name:"水费",info:"128.00"}）
+browser_assert  selector=".grid-item"  text="水费"
+browser_screenshot
 ```
 
-```text
-browser_assert  selector=".empty-wrap" count=1 text="暂无可用缴费服务"
-        等待选择器出现（默认 5s），返回 {pass, count, actualText, elapsedMs}——不满足时是正常的
-        pass:false，绝不抛错。这是最省 token 的验证手段；先断言，确有必要再截图。
+## 安装
+
+```sh
+dsh plugin --profile web add dsh-browser-verify@0.1.1
 ```
 
-```text
-browser_screenshot  name="livingPayment-empty" fullPage=false
-        截取当前页并将图片块自动投影进模型上下文；返回尺寸/哈希，若与上一张字节完全一致则
-        附 identicalToPrevious:true（疑似页面未刷新——请 browser_open 重开）。
+版本故意钉死：pnpm 11 会暂缓 24 小时内新发布的包，裸写 `add
+dsh-browser-verify`（latest）会在发布当天装到上一个版本。`--profile web`
+是本部署的 GUI profile——如果不同请换成你自己的 profile 名。
+
+要求 **dsh ≥ 0.1.2-alpha.1**。
+
+### 浏览器前置（务必读）
+
+本插件**不自带 Chromium**——它在你机器上找浏览器。先装一次：
+
+```sh
+npx playwright install chromium     # 需要 playwright-core@1.62.0
 ```
+
+或通过 `DSH_BROWSER_VERIFY_CHROMIUM` 指向已有二进制（见
+[环境变量](#环境变量)）。两者都没有时，第一次 `browser_open` 会给出可操作的安装提示。
+
+### 源码 checkout 安装
+
+```sh
+pnpm install && pnpm build && pnpm pack     # → dsh-browser-verify-<version>.tgz
+dsh plugin --profile web add ./dsh-browser-verify-<version>.tgz
+# 或：dsh plugin --profile web add /path/to/dsh-browser-verify  （需先 build——lib/ 不入库）
+```
+
+tgz 内已含预构建 `lib/`，安装机无需再构建。
 
 ## 环境变量
 
-| 变量 | 默认值 | 含义 |
+| 变量 | 默认 | 含义 |
 |---|---|---|
-| `DSH_BROWSER_VERIFY_CHROMIUM` | （未设置） | Chromium 二进制完整路径，优先级高于缓存探测；启动时校验存在性，路径有误会给出提示。 |
-| `DSH_BROWSER_VERIFY_TIMEOUT` | `10000` | 超时（ms）：页面加载 / 等待选择器 / mock reload；仅包裹 `browser_open` 的页面加载路径（其余三个工具仅 FIFO 串行，无墙钟超时）。 |
-| `DSH_BROWSER_VERIFY_IDLE_MS` | `600000` | 空闲回收窗口（ms），到时自动关闭浏览器实例；插件 dispose 时无论如何会强制清理。 |
+| `DSH_BROWSER_VERIFY_CHROMIUM` | *(未设置)* | Chromium 完整路径；优先于缓存探测。路径错误时启动即报可操作提示。 |
+| `DSH_BROWSER_VERIFY_TIMEOUT` | `10000` | `browser_open` 页面加载路径的墙钟预算（ms），含 wait-selector 与 mock reload。 |
+| `DSH_BROWSER_VERIFY_IDLE_MS` | `600000` | 空闲回收窗口（ms），超时后浏览器实例自动关闭；插件 dispose 时强制清理。 |
 
-## 垃圾清理
+## 可靠性与清理
 
-本插件只会在系统临时目录（自己的 `dsh-browser-verify-*` 前缀）、harness 附件库、以及你显式指定的 `--persist` 路径落东西。启动时会清扫过期残留目录（>1h、仅限自己的前缀）并兜底杀死孤儿 Chromium；但宿主崩溃后仍建议手动执行：
+- **单浏览器单场景**——每进程一个惰性单例，FIFO 串行工具访问，10 分钟空闲回收，dispose 全量清理。
+- **截图幂等**——字节一致时返回 `identicalToPrevious:true`，不再把同一张图重复发给模型。
+- **零垃圾纪律**——插件只写系统临时目录（`dsh-browser-verify-*` 前缀）、DSH 附件库和显式 `--persist` 路径。宿主崩溃后手动清理：
 
-```bash
-# 崩溃残留的临时目录/profile 目录（注意 macOS tmpdir 不是 /tmp）
-rm -rf "$(node -p 'require("os").tmpdir()')/dsh-browser-verify-*"
-```
+  ```sh
+  rm -rf "$(node -p 'require("os").tmpdir()')/dsh-browser-verify-*"
+  ```
 
-- **附件库**：截图持久化到 harness 全局附件库 `~/.dsh/attachments`（内容寻址，相同字节自动去重）。其生命周期由 harness 附件库管理，不随工具退出删除。
-- **Playwright 缓存**：首次安装（`npx playwright install chromium`，需 `playwright-core@1.62.0`）写入机器级缓存（`~/Library/Caches/ms-playwright`）。整个目录可整删后重装；插件本身只会探测该缓存中的可用二进制，不会自行下载。
-- **打包产物**：`pnpm pack` 产生的 `*.tgz` 已被 gitignore，可随意删除。
+- **错误即接口**——所有错误以 `browser-verify: ` 前缀开头、以可操作建议结尾；验证"失败"是结果（`pass:false`），不是异常。
+
+## 测试状态
+
+39 个单测（完全离线，无需浏览器）、严格 typecheck、每文件 ≥90% 语句覆盖率闸门。已在 **dsh 0.1.2-alpha.4 真实 GUI 端到端验证**：对一个真实 uni-app H5（hhhweb），空态+正常态两态闭环共 6 次调用，截图自动投影，无临时目录残留、无僵尸进程。
+
+## 已知限制
+
+- **只读**：不点击、不输入、不滚动——仅验证。同时只有一个场景；每次 `browser_open` 重置 mocks 与页面状态。
+- **平台**：已实测 macOS arm64。其他平台请用 `DSH_BROWSER_VERIFY_CHROMIUM` 指定浏览器二进制。
+- **单机假设**：启动清理只处理超过 1 小时的 `dsh-browser-verify-*` pid 目录，同机多实例互不影响。
+- **无 GUI 配置卡**——配置仅环境变量（见上）。
 
 ## 开发
 
 ```bash
 pnpm install
-pnpm build            # tsc -b && tsdown  → lib/
-pnpm test             # vitest run
-pnpm vitest run --coverage   # discover/cleanup/attachments 逐文件语句覆盖 ≥90% 门槛
+pnpm build            # tsc -b && tsdown → lib/（clean 构建；lib/ 不入库）
+pnpm test             # vitest run（离线）
 pnpm typecheck
-node lib/cli.js --url 'http://localhost:5173/hweb/#/pages/lyp/livingPayment' \
-  --mock tests/fixtures/mock-empty.json --wait-selector '.header' \
-  --assert '.empty-wrap' --screenshot
-scripts/smoke.sh      # 两态端到端冒烟；需要 hhhweb dev server 在 :5173 运行
+pnpm vitest run --coverage   # discover / cleanup / attachments 每文件 ≥90%
+scripts/smoke.sh      # 两态端到端；需要参考应用 dev server 在 :5173
 ```
 
-CLI 选项：`--url <u>`（必填）、`--mock <file.json>`、`--wait-selector <sel>`、`--assert <sel>`、`--screenshot`、`--persist <dir>`（保留 PNG）、`--viewport <WxH>`。
+CLI（免 harness 的调试路径）：`node lib/cli.js --url <u> [--mock <file.json>]
+[--wait-selector <sel>] [--assert <sel>] [--screenshot] [--persist <dir>]
+[--viewport <WxH>]`。
 
-## 多机迁移
+## 许可与署名
 
-1. 复制/克隆本仓库并执行 `pnpm install && pnpm build && pnpm pack`。
-2. 在目标机器 `dsh plugin --profile web add ./dsh-browser-verify-<版本号>.tgz`。
-3. 浏览器缓存**不随仓库**：先 `npx playwright install chromium` 安装一次（或将 `DSH_BROWSER_VERIFY_CHROMIUM` 指向已有二进制）。
-
-## 注意事项
-
-- **单机假设**：启动清扫按“每台机器一个 harness 实例”设计——只清理超过 1h 的 `dsh-browser-verify-*` pid 目录（及对应孤儿进程），同机多实例的新鲜目录不受影响。
-- **平台**：已在 macOS arm64 实测验证；其他平台请用 `DSH_BROWSER_VERIFY_CHROMIUM` 指向浏览器二进制。
-
-## 真实应用注意事项
-
-- uni-app H5 页面使用 hash 路由（`/hweb/#/pages/...`），API 响应信封为 `{status, result}`——均已在参考应用（hhhweb）实测确认。
-- 真实 API 返回“session invalid”时会跳转/回退的路由：mock 必须在导航前注册——请通过 `browser_open` 的 `mocks` 传入（CLI 则用 `--mock`）。
+Apache-2.0。面向 agent 与贡献者的架构说明与实现约定见 [AGENTS.md](AGENTS.md)。

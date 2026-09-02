@@ -1,7 +1,7 @@
 {
   "name": "dsh-browser-verify",
   "description": "Read-only browser verification tools for the DeepSeek Harness web GUI: browser_open / browser_mock / browser_assert / browser_screenshot — verify a page (H5/desktop) in ≤4 tool calls with mock interception, DOM assertions, and screenshots that auto-project into the model context.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "packageManager": "pnpm@11.7.0",
   "engines": {
