@@ -3,7 +3,7 @@
 [English](README.md) | 中文
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D22-blue.svg)](package.json)
+[![Node](<https://img.shields.io/badge/node-%3E%3D22-blue.svg>)](package.json)
 
 **给你的 DeepSeek Harness 一双看网页的眼睛** —— 只读浏览器验证，≤4 次工具调用完成：打开、mock、断言、截图。
 
@@ -34,12 +34,12 @@ browser_assert  selector=".empty-wrap" text="暂无可用缴费服务"
 
 ## 它做什么
 
-| 工具 | 用途 |
-|---|---|
-| `browser_open` | 在全新场景中打开 URL（无头 Chromium，默认视口 390×844 @2x），返回 title / HTTP 状态 / 可见文本摘要 / console 错误。可选 `waitSelector` 等待关键元素出现后再返回；可选内联 `mocks` 在**首次导航前**拦截接口——用于一启动就依赖 mock 数据的页面。 |
-| `browser_mock` | 注册 playwright glob 路由（如 `**/api/*.do*`）返回指定 JSON，并自动 reload 页面展示 mock 状态——不碰后端最快验证空态/异常态。重复 pattern 会提示报错。 |
-| `browser_assert` | 最省 token 也最精确的验证：等待 CSS 选择器出现，校验数量与包含文本，返回 `{pass, count, actualText, elapsedMs}`。不满足时返回 `pass:false`（附差异），**绝不抛错**——失败是一等公民的结果，而不是要调试的异常。 |
-| `browser_screenshot` | 截取当前页面（视口或整页），**自动以 image block 投影到模型上下文**——模型直接"看见"版式，无需任何文件处理。返回尺寸、sha256；与上一张完全一致时 `identicalToPrevious:true`（疑似页面未刷新）。 |
+| 工具                   | 用途                                                                                                                                                                                                                                                       |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `browser_open`       | 在全新场景中打开 URL（无头 Chromium，默认视口 390×844 @2x），返回 title / HTTP 状态 / 可见文本摘要 / console 错误。可选`waitSelector` 等待关键元素出现后再返回；可选内联 `mocks` 在**首次导航前**拦截接口——用于一启动就依赖 mock 数据的页面。 |
+| `browser_mock`       | 注册 playwright glob 路由（如`**/api/*.do*`）返回指定 JSON，并自动 reload 页面展示 mock 状态——不碰后端最快验证空态/异常态。重复 pattern 会提示报错。                                                                                                   |
+| `browser_assert`     | 最省 token 也最精确的验证：等待 CSS 选择器出现，校验数量与包含文本，返回`{pass, count, actualText, elapsedMs}`。不满足时返回 `pass:false`（附差异），**绝不抛错**——失败是一等公民的结果，而不是要调试的异常。                                  |
+| `browser_screenshot` | 截取当前页面（视口或整页），**自动以 image block 投影到模型上下文**——模型直接"看见"版式，无需任何文件处理。返回尺寸、sha256；与上一张完全一致时 `identicalToPrevious:true`（疑似页面未刷新）。                                                   |
 
 先 `browser_assert` 再 `browser_screenshot`：断言更便宜，截图留给必须判断
 渲染效果的时刻。
@@ -64,8 +64,7 @@ browser_screenshot
 dsh plugin --profile web add dsh-browser-verify@0.1.2
 ```
 
-版本故意钉死：pnpm 11 会暂缓 24 小时内新发布的包，裸写 `add
-dsh-browser-verify`（latest）会在发布当天装到上一个版本。`--profile web`
+版本故意钉死：pnpm 11 会暂缓 24 小时内新发布的包，裸写 `add dsh-browser-verify`（latest）会在发布当天装到上一个版本。`--profile web`
 是本部署的 GUI profile——如果不同请换成你自己的 profile 名。
 
 要求 **dsh ≥ 0.1.2-alpha.1**。
@@ -83,11 +82,11 @@ npx playwright install chromium     # 需要 playwright-core@1.62.0
 
 ## 环境变量
 
-| 变量 | 默认 | 含义 |
-|---|---|---|
-| `DSH_BROWSER_VERIFY_CHROMIUM` | *(未设置)* | Chromium 完整路径；优先于缓存探测。路径错误时启动即报可操作提示。 |
-| `DSH_BROWSER_VERIFY_TIMEOUT` | `10000` | `browser_open` 页面加载路径的墙钟预算（ms），含 wait-selector 与 mock reload。 |
-| `DSH_BROWSER_VERIFY_IDLE_MS` | `600000` | 空闲回收窗口（ms），超时后浏览器实例自动关闭；插件 dispose 时强制清理。 |
+| 变量                            | 默认         | 含义                                                                             |
+| ------------------------------- | ------------ | -------------------------------------------------------------------------------- |
+| `DSH_BROWSER_VERIFY_CHROMIUM` | *(未设置)* | Chromium 完整路径；优先于缓存探测。路径错误时启动即报可操作提示。                |
+| `DSH_BROWSER_VERIFY_TIMEOUT`  | `10000`    | `browser_open` 页面加载路径的墙钟预算（ms），含 wait-selector 与 mock reload。 |
+| `DSH_BROWSER_VERIFY_IDLE_MS`  | `600000`   | 空闲回收窗口（ms），超时后浏览器实例自动关闭；插件 dispose 时强制清理。          |
 
 ## 可靠性与清理
 
@@ -98,7 +97,6 @@ npx playwright install chromium     # 需要 playwright-core@1.62.0
   ```sh
   rm -rf "$(node -p 'require("os").tmpdir()')/dsh-browser-verify-*"
   ```
-
 - **错误即接口**——所有错误以 `browser-verify: ` 前缀开头、以可操作建议结尾；验证"失败"是结果（`pass:false`），不是异常。
 
 ## 测试状态
@@ -123,9 +121,7 @@ pnpm vitest run --coverage   # discover / cleanup / attachments 每文件 ≥90%
 scripts/smoke.sh      # 两态端到端；需要参考应用 dev server 在 :5173
 ```
 
-CLI（免 harness 的调试路径）：`node lib/cli.js --url <u> [--mock <file.json>]
-[--wait-selector <sel>] [--assert <sel>] [--screenshot] [--persist <dir>]
-[--viewport <WxH>]`。
+CLI（免 harness 的调试路径）：`node lib/cli.js --url <u> [--mock <file.json>] [--wait-selector <sel>] [--assert <sel>] [--screenshot] [--persist <dir>] [--viewport <WxH>]`。
 
 贡献者可本地构建后安装：`pnpm build` 后
 `dsh plugin --profile web add ./dsh-browser-verify-<version>.tgz`——tgz 内已含
