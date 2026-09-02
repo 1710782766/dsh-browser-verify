@@ -71,7 +71,16 @@ export function discoverBrowser(opts: DiscoverOptions = {}): DiscoveredBrowser {
     return { executablePath: opts.overridePath, kind: 'custom', revision: 0, known: true, versionHint: null }
   }
   const cacheDir = opts.cacheDir ?? defaultCacheDir()
-  const list = opts.entries ?? (exists(cacheDir) ? readdirSync(cacheDir) : null)
+  let list: string[] | null = null
+  if (opts.entries !== undefined) {
+    list = opts.entries
+  } else {
+    try {
+      list = readdirSync(cacheDir)
+    } catch {
+      list = null
+    }
+  }
   if (list === null) {
     throw new Error(`browser-verify: 未找到浏览器缓存目录 ${cacheDir}。请先安装：npx playwright install chromium（需 playwright-core@1.62.0），或设置 DSH_BROWSER_VERIFY_CHROMIUM=<完整路径>。`)
   }
@@ -82,7 +91,7 @@ export function discoverBrowser(opts: DiscoverOptions = {}): DiscoveredBrowser {
     if (!exists(executablePath)) {
       throw new Error(`browser-verify: 缓存目录存在 ${prefix}${revision} 但可执行文件缺失（${cacheDir}）。请删除该目录后重新执行 npx playwright install chromium。`)
     }
-    const known = kind === 'headless-shell' && KNOWN_REVISIONS[revision] !== undefined
+    const known = KNOWN_REVISIONS[revision] !== undefined
     return {
       executablePath,
       kind,

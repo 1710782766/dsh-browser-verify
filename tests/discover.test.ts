@@ -25,12 +25,26 @@ describe('discoverBrowser', () => {
     })
     expect(found.kind).toBe('chromium')
     expect(found.revision).toBe(1234)
+    expect(found.known).toBe(true)
   })
 
   it('prefers the env override path verbatim', () => {
     const found = discoverBrowser({ cacheDir: CACHE, overridePath: '/opt/custom/chrome', exists: () => true })
     expect(found.executablePath).toBe('/opt/custom/chrome')
     expect(found.kind).toBe('custom')
+  })
+
+  it('throws when the override path does not exist', () => {
+    expect(() => discoverBrowser({ cacheDir: CACHE, overridePath: '/opt/custom/chrome', exists: () => false }))
+      .toThrow(/不存在/)
+  })
+
+  it('throws when a cached revision lacks its executable', () => {
+    expect(() => discoverBrowser({
+      cacheDir: CACHE,
+      entries: [LIST[0]],
+      exists: (p) => p === CACHE,
+    })).toThrow(/可执行文件缺失/)
   })
 
   it('marks unknown revisions with a hint instead of failing', () => {
