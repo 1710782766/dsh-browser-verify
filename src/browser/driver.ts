@@ -97,7 +97,7 @@ export class BrowserDriver {
   }
 
   /** Open a fresh verification scenario; per design, each open = new context+page. */
-  async startScenario(reset: { url: string; waitSelector?: string; timeoutMs?: number }): Promise<OpenResult> {
+  async startScenario(reset: { url: string; waitSelector?: string; timeoutMs?: number; viewport?: { width: number; height: number }; deviceScaleFactor?: number }): Promise<OpenResult> {
     this.ensureNotDisposed()
     return this.chain(async () => {
       this.ensureNotDisposed()
@@ -106,12 +106,12 @@ export class BrowserDriver {
     })
   }
 
-  private async openScenario(reset: { url: string; waitSelector?: string; timeoutMs?: number }): Promise<OpenResult> {
+  private async openScenario(reset: { url: string; waitSelector?: string; timeoutMs?: number; viewport?: { width: number; height: number }; deviceScaleFactor?: number }): Promise<OpenResult> {
     const browser = await this.ensureBrowser()
     await this.scenario?.close()
     const context = await browser.newContext({
-      viewport: this.opts.viewport ?? { width: 390, height: 844 },
-      deviceScaleFactor: this.opts.deviceScaleFactor ?? 2,
+      viewport: reset.viewport ?? this.opts.viewport ?? { width: 390, height: 844 },
+      deviceScaleFactor: reset.deviceScaleFactor ?? this.opts.deviceScaleFactor ?? 2,
     })
     const page = await context.newPage()
     this.scenario = new Scenario(page, context)

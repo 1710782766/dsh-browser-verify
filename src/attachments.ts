@@ -75,7 +75,7 @@ export async function saveScreenshot(ctx: Context, data: Buffer, name: string | 
 /** Gate: the calling route must be able to see image input (mirror of read-image). */
 export async function assertImageCapable(
   ctx: Context,
-  exec: { agent?: { session?: { requestHeader?: () => { config?: { provider?: string; model?: string } } }; options?: { provider?: string; model?: string } } },
+  exec: { agent?: { session?: { requestHeader?: () => { config?: { provider?: string; model?: string } } | undefined }; options?: { provider?: string; model?: string } } },
 ): Promise<void> {
   const routed = exec.agent?.session?.requestHeader?.()?.config
   const provider = routed?.provider ?? exec.agent?.options?.provider
