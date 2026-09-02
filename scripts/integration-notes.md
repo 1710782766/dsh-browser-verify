@@ -22,6 +22,21 @@
 单测 39 → 41（新增 isNoiseText / summarize 噪音过滤两例）；工具描述与 README ×2
 同步；版本 0.1.3。
 
+## 0.1.4 复验 — 浏览器发现链 A+B ✅（生态摩擦优化）
+
+实施：探测链 = env 覆盖 → playwright 缓存（任意已装版本，headless-shell 高 rev →
+chromium）→ **系统浏览器兜底**（darwin/linux/win32 常见路径 + $PATH 命令解析，
+kind='system'，未认证 hint）→ 报错（列探测范围 + 一键安装命令，去掉"需
+playwright-core@1.62.0"的误导措辞）。
+
+| 验证项 | 结果 |
+|---|---|
+| 真实环境缓存优先 | `headless-shell 1234 known=true` ✓ |
+| 模拟无缓存 → 系统兜底 | 真实命中 `/Applications/Google Chrome.app/...`，hint 正确 ✓（本机恰好装有 Chrome，零下载场景真实成立） |
+| 系统 Chrome launch 兼容 | CLI + `DSH_BROWSER_VERIFY_CHROMIUM` 指向系统 Chrome：hhhweb 打开、渲染正常、settle 生效（1753ms）✓ |
+| 单测 | discover 10 → 14（系统兜底/缓存优先/candidates 平台表/PATH 解析 → 共 45 全绿） |
+| smoke 三态回归 | 待跑（见下） |
+
 ## Step 1 — 构建并装载（pnpm link，免 pack）✅
 
 ```bash

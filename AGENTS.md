@@ -31,9 +31,13 @@ DeepSeek Harness 宿主插件：给模型四件只读浏览器验证工具（`br
     src/index.ts           插件入口：name='browser-verify', inject=['tools']；
                             启动孤儿清扫（sweepOrphans：>1h 且排除本进程 pid 目录，
                             best-effort .catch）+ registerBrowserTools
-    src/browser/discover.ts    纯函数：playwright 缓存探测（headless-shell>chromium，
-                            高 revision 优先），KNOWN_REVISIONS（1234↔1.62.x）认证表，
-                            env 覆盖 DSH_BROWSER_VERIFY_CHROMIUM；找不到 throw 安装提示
+    src/browser/discover.ts    纯函数：探测链 = env 覆盖 DSH_BROWSER_VERIFY_CHROMIUM →
+                            playwright 缓存（headless-shell>chromium，高 revision 优先，
+                            任意版本可用，未认证仅 hint）→ 系统浏览器兜底（Chrome/
+                            Chromium/Edge 常见路径 + $PATH 命令解析，kind='system'，
+                            未认证 hint）→ throw（报错列探测范围 + 一键安装命令）；
+                            KNOWN_REVISIONS（1234↔1.62.x）认证表；
+                            systemBrowserCandidates / resolveCommandOnPath 纯函数可注入
     src/cleanup.ts         纯解析：parseZombiePids（ps 文本→本前缀 pid）、
                             selectOrphanDirs（前缀+超龄+mtime 降序）
     src/browser/scenario.ts   纯函数（assertNoMockConflict/normalizeCountSpec/isNoiseText/
@@ -132,8 +136,10 @@ DeepSeek Harness 宿主插件：给模型四件只读浏览器验证工具（`br
   按包名从 registry 解析。
 - git 直装需要 prepare 脚本 + 用户 allowBuilds——本仓库未提供 `prepare`，
   **文档不得写 git 直装方式**。
-- 浏览器缓存不随包分发：安装机需 `npx playwright install chromium`
-  （playwright-core@1.62.0）或设 `DSH_BROWSER_VERIFY_CHROMIUM`。
+- 浏览器缓存不随包分发；探测链（0.1.4 起）已覆盖绝大多数机器：playwright 缓存
+  （任意已装版本）→ 系统 Chrome/Chromium/Edge（常见路径 + $PATH）→ 都没有时
+  才需 `npx playwright install chromium` 或设 `DSH_BROWSER_VERIFY_CHROMIUM`；
+  文档不得写"必须先装"。
 
 ## 关键事实（改实现前先读）
 
@@ -144,7 +150,9 @@ DeepSeek Harness 宿主插件：给模型四件只读浏览器验证工具（`br
   0.1.3 起 open 默认稳定等待 + 噪音过滤后快照为渲染后状态；断言仍建议等
   真实条目）；boot 即 3 个 `*.do*` 接口。
 - **单机假设**：启动清扫仅处理超龄本前缀 pid 目录；同机多实例安全。
-- **平台**：已验证 macOS arm64（`SUBDIRS` 为 arm64 布局）；其他平台走
-  DSH_BROWSER_VERIFY_CHROMIUM。
+- **平台**：已验证 macOS arm64（`SUBDIRS` 为 arm64 布局）+ 系统 Google Chrome
+  （launchPersistentContext + `--headless=new` 实机验证，0.1.4）；系统浏览器候选
+  枚举覆盖 darwin/linux/win32 常见路径与 `$PATH`（纯函数单测覆盖，非 macOS 实机
+  未验——异常时仍建议 DSH_BROWSER_VERIFY_CHROMIUM）。
 - **ps 依赖**：cleanup/killProcessTree 路径依赖 `ps`——在禁用 ps 的沙箱内
   行为降级为无操作（冒烟中 `pgrep` 是替代证据）。

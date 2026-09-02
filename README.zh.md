@@ -12,7 +12,7 @@
 ## 快速上手
 
 ```sh
-dsh plugin --profile web add dsh-browser-verify@0.1.3
+dsh plugin --profile web add dsh-browser-verify@0.1.4
 ```
 
 1. **安装**（更多方式见 [安装](#安装)）。
@@ -74,7 +74,7 @@ browser_screenshot
 ## 安装
 
 ```sh
-dsh plugin --profile web add dsh-browser-verify@0.1.3
+dsh plugin --profile web add dsh-browser-verify@0.1.4
 ```
 
 版本故意钉死：pnpm 11 会暂缓 24 小时内新发布的包，裸写 `add dsh-browser-verify`（latest）会在发布当天装到上一个版本。`--profile web`
@@ -82,16 +82,21 @@ dsh plugin --profile web add dsh-browser-verify@0.1.3
 
 要求 **dsh ≥ 0.1.2-alpha.1**。
 
-### 浏览器前置（务必读）
+### 浏览器前置（通常无需）
 
-本插件**不自带 Chromium**——它在你机器上找浏览器。先装一次：
+本插件**不自带 Chromium**——它在你机器上找浏览器：playwright 缓存（任意安装版本），
+然后是系统 Chrome / Chromium / Edge 的常见安装路径与 `$PATH`。多数机器——装过任何
+playwright 项目，或装有 Chrome——零配置直接可用。
+
+两者都没有时才需要装一次：
 
 ```sh
-npx playwright install chromium     # 需要 playwright-core@1.62.0
+npx playwright install chromium
 ```
 
 或通过 `DSH_BROWSER_VERIFY_CHROMIUM` 指向已有二进制（见
-[环境变量](#环境变量)）。两者都没有时，第一次 `browser_open` 会给出可操作的安装提示。
+[环境变量](#环境变量)）。系统浏览器直接使用（附"未认证版本"提示）；一个浏览器
+都没有时，第一次 `browser_open` 会给出可操作的安装提示。
 
 ## 环境变量
 

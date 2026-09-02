@@ -18,7 +18,7 @@ verification is just tool calls.
 ## Quick start
 
 ```sh
-dsh plugin --profile web add dsh-browser-verify@0.1.3
+dsh plugin --profile web add dsh-browser-verify@0.1.4
 ```
 
 1. **Install** with the command above (or see [Install](#install)).
@@ -85,7 +85,7 @@ browser_screenshot
 ## Install
 
 ```sh
-dsh plugin --profile web add dsh-browser-verify@0.1.3
+dsh plugin --profile web add dsh-browser-verify@0.1.4
 ```
 
 The version is pinned on purpose: pnpm 11 holds back packages published in the
@@ -95,18 +95,23 @@ of this deployment — use your own profile name if it differs.
 
 Requires **dsh ≥ 0.1.2-alpha.1**.
 
-### Browser prerequisite (read this)
+### Browser prerequisite (usually none)
 
-The plugin does **not** download Chromium — it finds a browser on your machine
-instead. Install it once with:
+The plugin does **not** download Chromium — it finds a browser on your machine:
+the playwright cache (any installed version), then system Chrome / Chromium /
+Edge on common install paths and `$PATH`. Most machines — anything that ever
+ran a playwright project, or has Chrome installed — work with zero setup.
+
+Only when neither exists, install the browser once:
 
 ```sh
-npx playwright install chromium     # needs playwright-core@1.62.0
+npx playwright install chromium
 ```
 
 or point the plugin at an existing binary via `DSH_BROWSER_VERIFY_CHROMIUM`
-(see [Environment variables](#environment-variables)). Without either, the
-first `browser_open` fails with an actionable install hint.
+(see [Environment variables](#environment-variables)). A system browser is
+used as-is with an "unverified version" hint; without any browser, the first
+`browser_open` fails with an actionable install hint.
 
 ## Environment variables
 
