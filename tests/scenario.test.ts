@@ -17,7 +17,7 @@ describe('scenario pure helpers', () => {
     const out = summarizeVisibleText([' 空 ' , '空', 'x'.repeat(100), 'a', 'b', 'c', 'd', 'e', 'f', 'g'])
     expect(out).toHaveLength(8)
     expect(out[0]).toBe('空')
-    expect(out[2]).toHaveLength(40)
+    expect(out[1]).toHaveLength(40)
   })
 
   it('caps console errors at 5 entries of 120 chars', () => {

@@ -54,8 +54,8 @@ export function summarizeVisibleText(texts: string[]): string[] {
     const trimmed = raw.trim()
     if (trimmed === '') continue
     const reduced = trimmed.length > MAX_VISIBLE_LEN ? trimmed.slice(0, MAX_VISIBLE_LEN) : trimmed
-    if (seen.has(raw)) continue
-    seen.add(raw)
+    if (seen.has(reduced)) continue
+    seen.add(reduced)
     out.push(reduced)
     if (out.length >= MAX_VISIBLE) break
   }
