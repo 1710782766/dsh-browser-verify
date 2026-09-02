@@ -1,0 +1,1 @@
+{ "urlPattern": "**/api/*.do*", "json": { "status": 0, "result": { "data": {}, "list": [] } }, "status": 200 }

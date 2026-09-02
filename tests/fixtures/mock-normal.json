@@ -1,0 +1,1 @@
+{ "urlPattern": "**/api/*.do*", "json": { "status": 0, "result": { "data": {}, "list": [ { "wegType": "WATER", "name": "水费", "info": "128.00" } ] } }, "status": 200 }

@@ -13,11 +13,14 @@ import { chromium, type Browser } from 'playwright-core'
 import { discoverBrowser } from './discover.ts'
 import { Scenario, type OpenResult } from './scenario.ts'
 
-export function buildLaunchArgs(userDataDir: string, executablePath: string, headlessShell: boolean): string[] {
-  return [
-    `--user-data-dir=${userDataDir}`,
-    headlessShell ? '--headless' : '--headless=new',
-  ]
+/**
+ * Headless launch args. Deviation D8-3: playwright-core >= 1.41 rejects
+ * `--user-data-dir` inside `args` (misuse error, both launch and
+ * launchPersistentContext); the user data dir must be passed as the
+ * launchPersistentContext first parameter. Only the headless-mode flag remains.
+ */
+export function buildLaunchArgs(headlessShell: boolean): string[] {
+  return [headlessShell ? '--headless' : '--headless=new']
 }
 
 /** Best-effort SIGKILL of a pid and its descendants (macOS ps). */
@@ -97,7 +100,7 @@ export class BrowserDriver {
   }
 
   /** Open a fresh verification scenario; per design, each open = new context+page. */
-  async startScenario(reset: { url: string; waitSelector?: string; timeoutMs?: number; viewport?: { width: number; height: number }; deviceScaleFactor?: number }): Promise<OpenResult> {
+  async startScenario(reset: { url: string; waitSelector?: string; timeoutMs?: number; viewport?: { width: number; height: number }; deviceScaleFactor?: number; mocks?: Array<{ urlPattern: string; json: unknown; status?: number }> }): Promise<OpenResult> {
     this.ensureNotDisposed()
     return this.chain(async () => {
       this.ensureNotDisposed()
@@ -106,7 +109,7 @@ export class BrowserDriver {
     })
   }
 
-  private async openScenario(reset: { url: string; waitSelector?: string; timeoutMs?: number; viewport?: { width: number; height: number }; deviceScaleFactor?: number }): Promise<OpenResult> {
+  private async openScenario(reset: { url: string; waitSelector?: string; timeoutMs?: number; viewport?: { width: number; height: number }; deviceScaleFactor?: number; mocks?: Array<{ urlPattern: string; json: unknown; status?: number }> }): Promise<OpenResult> {
     const browser = await this.ensureBrowser()
     await this.scenario?.close()
     const context = await browser.newContext({
@@ -117,6 +120,12 @@ export class BrowserDriver {
     this.scenario = new Scenario(page, context)
     this.resetIdleTimer()
     try {
+      // Deviation D8-5: pre-register mocks before the first navigations so the
+      // app boots against mocked APIs (some apps bounce to a fallback route
+      // when real APIs answer "session invalid").
+      for (const rule of reset.mocks ?? []) {
+        await this.scenario.addMock({ ...rule, reload: false })
+      }
       return await this.scenario.navigate({
         url: reset.url,
         waitSelector: reset.waitSelector,
@@ -139,10 +148,18 @@ export class BrowserDriver {
     if (this.browser !== null) return this.browser
     try {
       const found = (this.opts.discover ?? discoverBrowser)()
-      this.browser = await chromium.launch({
+      // Deviation D8-3: launchPersistentContext is the only launch path that
+      // puts our predictable temp dir on the chromium command line
+      // (`--user-data-dir` is appended by playwright itself), which the
+      // cleanup/zombie matchers and the smoke rely on.
+      const persistent = await chromium.launchPersistentContext(this.userDataDir, {
         executablePath: found.executablePath,
-        args: buildLaunchArgs(this.userDataDir, found.executablePath, found.kind === 'headless-shell'),
+        args: buildLaunchArgs(found.kind === 'headless-shell'),
+        headless: true,
       })
+      const browser = persistent.browser()
+      if (browser === null) throw new Error('browser-verify: 持久化上下文未返回浏览器实例。')
+      this.browser = browser
     } catch (error) {
       throw this.wrapError(error, '浏览器启动失败', '请检查 DSH_BROWSER_VERIFY_CHROMIUM 指向的浏览器路径，或重新执行 npx playwright install chromium。')
     }
