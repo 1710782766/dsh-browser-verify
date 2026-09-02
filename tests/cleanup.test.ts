@@ -8,7 +8,7 @@ describe('parseZombiePids', () => {
     const ps = [
       `12345 1 /path/to/chrome --user-data-dir=${join(tmpdir(), 'dsh-browser-verify-999')}/chrome`,
       '54321 1 /usr/bin/something --user-data-dir=/tmp/other',
-      '999 1 /bin/sh',
+      `999 1 /path/to/chrome --user-data-dir=${join(tmpdir(), 'dsh-browser-verify-999')}`,
     ].join('\n')
     expect(parseZombiePids(ps, 'dsh-browser-verify-', 999)).toEqual([12345])
   })

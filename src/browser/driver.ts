@@ -10,8 +10,13 @@ import { rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium, type Browser } from 'playwright-core'
-import { discoverBrowser } from './discover.ts'
+import { discoverBrowser, type DiscoveredBrowser } from './discover.ts'
 import { Scenario, type OpenResult } from './scenario.ts'
+
+export interface OpenScenarioResult extends OpenResult {
+  browserKnown: boolean
+  versionHint: string | null
+}
 
 /**
  * Headless launch args. Deviation D8-3: playwright-core >= 1.41 rejects
@@ -23,32 +28,9 @@ export function buildLaunchArgs(headlessShell: boolean): string[] {
   return [headlessShell ? '--headless' : '--headless=new']
 }
 
-/** Best-effort SIGKILL of a pid and its descendants (macOS ps). */
-export async function killProcessTree(pid: number): Promise<void> {
-  const out = await new Promise<string>((resolve) => {
-    exec('ps -Ao pid=,ppid=,command=', { maxBuffer: 10 * 1024 * 1024 }, (error, stdout) => resolve(error ? String(error.message) : stdout))
-  })
-  const children = new Map<number, number[]>()
-  for (const line of out.split('\n')) {
-    const m = /^\s*(\d+)\s+(\d+)/.exec(line)
-    if (m === null) continue
-    const child = Number(m[1]); const parent = Number(m[2])
-    const list = children.get(parent) ?? []
-    list.push(child)
-    children.set(parent, list)
-  }
-  const toKill: number[] = [pid]
-  for (let i = 0; i < toKill.length; i++) {
-    const next = children.get(toKill[i])
-    if (next !== undefined) toKill.push(...next)
-  }
-  for (const target of toKill.reverse()) {
-    try { process.kill(target, 'SIGKILL') } catch { /* already gone */ }
-  }
-}
-
 export class BrowserDriver {
   private browser: Browser | null = null
+  private discovered: DiscoveredBrowser | null = null
   private scenario: Scenario | null = null
   private readonly userDataDir = join(tmpdir(), `dsh-browser-verify-${process.pid}`, 'profile')
   private idleTimer: NodeJS.Timeout | null = null
@@ -100,7 +82,7 @@ export class BrowserDriver {
   }
 
   /** Open a fresh verification scenario; per design, each open = new context+page. */
-  async startScenario(reset: { url: string; waitSelector?: string; timeoutMs?: number; viewport?: { width: number; height: number }; deviceScaleFactor?: number; mocks?: Array<{ urlPattern: string; json: unknown; status?: number }> }): Promise<OpenResult> {
+  async startScenario(reset: { url: string; waitSelector?: string; timeoutMs?: number; viewport?: { width: number; height: number }; deviceScaleFactor?: number; mocks?: Array<{ urlPattern: string; json: unknown; status?: number }> }): Promise<OpenScenarioResult> {
     this.ensureNotDisposed()
     return this.chain(async () => {
       this.ensureNotDisposed()
@@ -109,7 +91,7 @@ export class BrowserDriver {
     })
   }
 
-  private async openScenario(reset: { url: string; waitSelector?: string; timeoutMs?: number; viewport?: { width: number; height: number }; deviceScaleFactor?: number; mocks?: Array<{ urlPattern: string; json: unknown; status?: number }> }): Promise<OpenResult> {
+  private async openScenario(reset: { url: string; waitSelector?: string; timeoutMs?: number; viewport?: { width: number; height: number }; deviceScaleFactor?: number; mocks?: Array<{ urlPattern: string; json: unknown; status?: number }> }): Promise<OpenScenarioResult> {
     const browser = await this.ensureBrowser()
     await this.scenario?.close()
     const context = await browser.newContext({
@@ -126,11 +108,16 @@ export class BrowserDriver {
       for (const rule of reset.mocks ?? []) {
         await this.scenario.addMock({ ...rule, reload: false })
       }
-      return await this.scenario.navigate({
+      const opened = await this.scenario.navigate({
         url: reset.url,
         waitSelector: reset.waitSelector,
         timeoutMs: reset.timeoutMs ?? this.opts.timeoutMs,
       })
+      return {
+        ...opened,
+        browserKnown: this.discovered?.known ?? true,
+        versionHint: this.discovered?.versionHint ?? null,
+      }
     } catch (error) {
       await this.scenario.close()
       this.scenario = null
@@ -148,6 +135,7 @@ export class BrowserDriver {
     if (this.browser !== null) return this.browser
     try {
       const found = (this.opts.discover ?? discoverBrowser)({ overridePath: process.env.DSH_BROWSER_VERIFY_CHROMIUM ?? undefined })
+      this.discovered = found
       // Deviation D8-3: launchPersistentContext is the only launch path that
       // puts our predictable temp dir on the chromium command line
       // (`--user-data-dir` is appended by playwright itself), which the
@@ -193,7 +181,33 @@ export class BrowserDriver {
     if (scenario !== null) { try { await scenario.close() } catch { /* ignore */ } }
     const browser = this.browser
     this.browser = null
-    if (browser !== null) { try { await browser.close() } catch { /* ignore */ } }
+    if (browser !== null) {
+      try { await browser.close() } catch {
+        // Graceful close failed (hung process / dead transport; the persistent
+        // context path has no internal kill fallback). Hard-kill any process
+        // still carrying our user-data-dir so no orphan survives the teardown.
+        try { await this.hardKillChromium() } catch { /* ignore */ }
+      }
+    }
     try { rmSync(join(tmpdir(), `dsh-browser-verify-${process.pid}`), { recursive: true, force: true }) } catch { /* ignore */ }
+  }
+
+  /**
+   * Hard-kill fallback: SIGKILL every process whose command line still
+   * carries our user-data-dir (playwright appends `--user-data-dir` itself;
+   * our predictable temp dir is the reverse-lookup key, per design §6).
+   */
+  private async hardKillChromium(): Promise<void> {
+    const out = await new Promise<string>((resolve) => {
+      exec('ps -Ao pid=,ppid=,command=', { maxBuffer: 10 * 1024 * 1024 }, (error, stdout) => resolve(error ? '' : stdout))
+    })
+    const marker = `--user-data-dir=${this.userDataDir}`
+    for (const line of out.split('\n')) {
+      const m = /^\s*(\d+)\s+\d+\s+(.+)$/.exec(line)
+      if (m === null) continue
+      if (m[2].includes(marker)) {
+        try { process.kill(Number(m[1]), 'SIGKILL') } catch { /* already gone */ }
+      }
+    }
   }
 }

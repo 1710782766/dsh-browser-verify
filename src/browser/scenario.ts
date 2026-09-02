@@ -134,17 +134,26 @@ export class Scenario {
 
   async assert(opts: { selector: string; count?: number | { min: number; max: number }; text?: string; timeoutMs: number }): Promise<AssertResult> {
     const started = Date.now()
+    const expected = normalizeCountSpec(opts.count)
     try {
       await this.page.waitForSelector(opts.selector, { state: 'attached', timeout: opts.timeoutMs })
     } catch (error) {
       const timedOut = error instanceof Error && /timeout/i.test(error.message)
-      // Element never appeared: a normal verification outcome, not a thrown failure.
-      if (timedOut) return { pass: false, count: 0, actualText: null, elapsedMs: Date.now() - started }
+      // Element never appeared: a normal verification outcome, not a thrown
+      // failure. An explicit absence assertion (count 0..0, no text) passes;
+      // everything else stays a normal pass:false.
+      if (timedOut) {
+        return {
+          pass: expected !== null && expected.min === 0 && expected.max === 0 && opts.text === undefined,
+          count: 0,
+          actualText: null,
+          elapsedMs: Date.now() - started,
+        }
+      }
       throw error
     }
     const count = await this.page.locator(opts.selector).count()
     const actualText = await this.page.locator(opts.selector).first().textContent()
-    const expected = normalizeCountSpec(opts.count)
     const pass = (expected === null || (count >= expected.min && count <= expected.max))
       && (opts.text === undefined || (actualText !== null && actualText.includes(opts.text)))
     return { pass, count, actualText, elapsedMs: Date.now() - started }

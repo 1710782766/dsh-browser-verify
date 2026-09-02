@@ -99,6 +99,11 @@ CLI 选项：`--url <u>`（必填）、`--mock <file.json>`、`--wait-selector <
 2. 在目标机器 `dsh plugin --profile web add ./dsh-browser-verify-<版本号>.tgz`。
 3. 浏览器缓存**不随仓库**：先 `npx playwright install chromium` 安装一次（或将 `DSH_BROWSER_VERIFY_CHROMIUM` 指向已有二进制）。
 
+## 注意事项
+
+- **单机假设**：启动清扫按“每台机器一个 harness 实例”设计——只清理超过 1h 的 `dsh-browser-verify-*` pid 目录（及对应孤儿进程），同机多实例的新鲜目录不受影响。
+- **平台**：已在 macOS arm64 实测验证；其他平台请用 `DSH_BROWSER_VERIFY_CHROMIUM` 指向浏览器二进制。
+
 ## 真实应用注意事项
 
 - uni-app H5 页面使用 hash 路由（`/hweb/#/pages/...`），API 响应信封为 `{status, result}`——均已在参考应用（hhhweb）实测确认。

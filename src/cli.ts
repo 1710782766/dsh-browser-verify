@@ -33,7 +33,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
     else if (arg === '--viewport') {
       const [w, h] = next().split('x').map(Number)
       opts.viewport = { width: w, height: h }
-    } else throw new Error(`browser-verify: 未知参数 ${arg}。请检查命令行用法（--url/--mock/--assert/--screenshot/--persist/--viewport）。`)
+    } else throw new Error(`browser-verify: 未知参数 ${arg}。请检查命令行用法（--url/--mock/--assert/--screenshot/--persist/--viewport/--wait-selector）。`)
   }
   if (opts.url === '') throw new Error('browser-verify: 缺少 --url。请提供页面地址，如 --url http://localhost:5173/hweb/#/pages/lyp/livingPayment。')
   return opts

@@ -10,9 +10,13 @@ import { BrowserDriver } from '../browser/driver.ts'
 import { assertImageCapable, renderScreenshotBlocks, saveScreenshot } from '../attachments.ts'
 import { withTimeout } from './timeout.ts'
 
-const envTimeoutMs = (): number => Number(process.env.DSH_BROWSER_VERIFY_TIMEOUT ?? 10000)
-const envIdleMs = (): number => Number(process.env.DSH_BROWSER_VERIFY_IDLE_MS ?? 600000)
-const defaultViewport = { width: 390, height: 844 }
+/** Parse a positive-integer env var; NaN/zero/negative falls back to the default. */
+const numberFromEnv = (name: string, fallback: number): number => {
+  const value = Number(process.env[name] ?? fallback)
+  return Number.isFinite(value) && value > 0 ? value : fallback
+}
+const envTimeoutMs = (): number => numberFromEnv('DSH_BROWSER_VERIFY_TIMEOUT', 10000)
+const envIdleMs = (): number => numberFromEnv('DSH_BROWSER_VERIFY_IDLE_MS', 600000)
 
 export function registerBrowserTools(ctx: Context): void {
   const driver = new BrowserDriver({ timeoutMs: envTimeoutMs(), idleMs: envIdleMs() })
@@ -23,7 +27,15 @@ export function registerBrowserTools(ctx: Context): void {
     description: '在无头浏览器中打开一个页面并返回页面状态（标题/状态码/可见文本摘要/console 错误）用于验证前端页面；可选 waitSelector 等待关键元素出现，默认视口 390×844 @2x（移动端形态）。可传 mocks 在打开时拦截接口（用于启动即依赖接口数据的页面）。验证顺序：先 browser_assert 做 DOM 断言，确需看版式再 browser_screenshot。',
     parameters: {
       url: { type: 'string', required: true, description: '页面地址，如 http://localhost:5173/hweb/pages/...' },
-      viewport: { type: 'object', additionalProperties: true, description: `视口尺寸，默认 ${defaultViewport.width}x${defaultViewport.height}` },
+      viewport: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          width: { type: 'number', required: true, description: '视口宽' },
+          height: { type: 'number', required: true, description: '视口高' },
+        },
+        description: '视口尺寸 {width, height}，默认 390x844',
+      },
       deviceScaleFactor: { type: 'number', description: '缩放比，默认 2' },
       mocks: {
         type: 'array',
@@ -31,9 +43,9 @@ export function registerBrowserTools(ctx: Context): void {
           type: 'object',
           additionalProperties: false,
           properties: {
-            urlPattern: { type: 'string', required: true },
-            json: { type: 'json', required: true },
-            status: { type: 'number' },
+            urlPattern: { type: 'string', required: true, description: 'glob 模式，如 **/api/*.do*' },
+            json: { type: 'json', required: true, description: '拦截响应体（任意 JSON）' },
+            status: { type: 'number', description: '响应状态码，默认 200' },
           },
         },
         description: '可选：页面启动前注册的接口拦截（glob urlPattern + json，如 [{urlPattern: "**/api/*.do*", json: {...}}]）',
@@ -52,14 +64,17 @@ export function registerBrowserTools(ctx: Context): void {
           visible: { type: 'array', items: { type: 'string' }, required: true },
           consoleErrors: { type: 'array', items: { type: 'string' }, required: true },
           elapsedMs: { type: 'number', required: true },
+          browserKnown: { type: 'boolean', required: true },
+          versionHint: { oneOf: [{ type: 'string' }, { type: 'null' }], required: true, description: '浏览器 revision 认证提示（null=认证通过）' },
         },
       },
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
     },
     async execute(args) {
+      const timeoutMs = args.timeoutMs ?? envTimeoutMs()
       return withTimeout(
-        driver.startScenario({ url: args.url, waitSelector: args.waitSelector, timeoutMs: args.timeoutMs ?? envTimeoutMs(), viewport: args.viewport as { width: number; height: number } | undefined, deviceScaleFactor: args.deviceScaleFactor, mocks: args.mocks }),
-        envTimeoutMs(), 'browser_open',
+        driver.startScenario({ url: args.url, waitSelector: args.waitSelector, timeoutMs, viewport: args.viewport, deviceScaleFactor: args.deviceScaleFactor, mocks: args.mocks }),
+        timeoutMs, 'browser_open',
       )
     },
   }))

@@ -102,6 +102,11 @@ CLI options: `--url <u>` (required), `--mock <file.json>`, `--wait-selector <sel
 2. `dsh plugin --profile web add ./dsh-browser-verify-<version>.tgz` on the target machine.
 3. The browser cache is **not** shipped with the repo: install once with `npx playwright install chromium` (or set `DSH_BROWSER_VERIFY_CHROMIUM` to an existing binary).
 
+## Notes
+
+- **Single-machine assumption**: the startup sweep assumes one harness instance per machine — it only removes `dsh-browser-verify-*` pid dirs older than 1 h (plus stray Chromium for those pids), so concurrent harnesses on one host keep their fresh dirs.
+- **Platform**: verified on macOS arm64. On other platforms point `DSH_BROWSER_VERIFY_CHROMIUM` at a browser binary.
+
 ## Notes for real apps
 
 - uni-app H5 pages use hash routes (`/hweb/#/pages/...`) and an API envelope of `{status, result}` — both confirmed against the reference app (hhhweb).

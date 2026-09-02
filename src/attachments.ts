@@ -66,7 +66,7 @@ export async function saveScreenshot(ctx: Context, data: Buffer, name: string | 
       throw new Error('browser-verify: 截图尺寸超过 attachment 存储限制。请改用 fullPage:false 或调低 deviceScaleFactor 后重试。', { cause: error })
     }
     if (error.code === 'IMAGE_TYPE_MISMATCH') {
-      throw new Error(`browser-verify: 截图格式校验失败：${error.message} 请改用 fullPage:false 后重试。`, { cause: error })
+      throw new Error(`browser-verify: 截图格式校验失败：${error.message} 请改用其他附件类型或重试。`, { cause: error })
     }
     throw error
   }

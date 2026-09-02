@@ -35,6 +35,6 @@ async function sweepOrphans(): Promise<void> {
 }
 
 export function apply(ctx: Context): void {
-  void sweepOrphans()
+  void sweepOrphans().catch(() => {})
   registerBrowserTools(ctx)
 }
