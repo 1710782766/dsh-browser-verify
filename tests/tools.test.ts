@@ -14,6 +14,7 @@ describe('registerBrowserTools', () => {
     registerBrowserTools(ctx as any)
     expect(registered.map(t => t.name)).toEqual(['browser_open', 'browser_mock', 'browser_assert', 'browser_screenshot'])
     expect(registered[0].parameters.required).toContain('url')
+    expect(registered[0].parameters.properties.mocks).toBeDefined()
     expect(registered[1].parameters.properties.urlPattern).toBeDefined()
     expect(registered[2].parameters.required).toContain('selector')
     expect(registered[3].parameters.properties.fullPage).toBeDefined()

@@ -20,11 +20,24 @@ export function registerBrowserTools(ctx: Context): void {
 
   ctx.tools.register(defineTool({
     name: 'browser_open',
-    description: '在无头浏览器中打开一个页面并返回页面状态（标题/状态码/可见文本摘要/console 错误）用于验证前端页面；可选 waitSelector 等待关键元素出现，默认视口 390×844 @2x（移动端形态）。验证顺序：先 browser_assert 做 DOM 断言，确需看版式再 browser_screenshot。',
+    description: '在无头浏览器中打开一个页面并返回页面状态（标题/状态码/可见文本摘要/console 错误）用于验证前端页面；可选 waitSelector 等待关键元素出现，默认视口 390×844 @2x（移动端形态）。可传 mocks 在打开时拦截接口（用于启动即依赖接口数据的页面）。验证顺序：先 browser_assert 做 DOM 断言，确需看版式再 browser_screenshot。',
     parameters: {
       url: { type: 'string', required: true, description: '页面地址，如 http://localhost:5173/hweb/pages/...' },
       viewport: { type: 'object', additionalProperties: true, description: `视口尺寸，默认 ${defaultViewport.width}x${defaultViewport.height}` },
       deviceScaleFactor: { type: 'number', description: '缩放比，默认 2' },
+      mocks: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            urlPattern: { type: 'string', required: true },
+            json: { type: 'json', required: true },
+            status: { type: 'number' },
+          },
+        },
+        description: '可选：页面启动前注册的接口拦截（glob urlPattern + json，如 [{urlPattern: "**/api/*.do*", json: {...}}]）',
+      },
       waitSelector: { type: 'string', description: '可选：等待该选择器出现后再返回（优先于固定等待）' },
       timeoutMs: { type: 'number', description: `加载超时，默认 ${envTimeoutMs()}ms` },
     },
@@ -45,7 +58,7 @@ export function registerBrowserTools(ctx: Context): void {
     },
     async execute(args) {
       return withTimeout(
-        driver.startScenario({ url: args.url, waitSelector: args.waitSelector, timeoutMs: args.timeoutMs ?? envTimeoutMs(), viewport: args.viewport as { width: number; height: number } | undefined, deviceScaleFactor: args.deviceScaleFactor }),
+        driver.startScenario({ url: args.url, waitSelector: args.waitSelector, timeoutMs: args.timeoutMs ?? envTimeoutMs(), viewport: args.viewport as { width: number; height: number } | undefined, deviceScaleFactor: args.deviceScaleFactor, mocks: args.mocks }),
         envTimeoutMs(), 'browser_open',
       )
     },
