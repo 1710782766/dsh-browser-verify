@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { imageRefFromValue, renderScreenshotBlocks } from '../src/attachments.ts'
+import { AttachmentError } from '@deepseek-ai/dsh-attachment'
+import { assertImageCapable, imageRefFromValue, renderScreenshotBlocks, saveScreenshot } from '../src/attachments.ts'
 
 describe('attachments', () => {
   it('brands a value into a durable attachment ref', () => {
@@ -26,5 +27,41 @@ describe('attachments', () => {
       sha256: 'sha256:abc', identicalToPrevious: true,
     })
     expect(blocks[0]).toMatchObject({ type: 'text', text: expect.stringMatching(/疑似页面未刷新/) })
+  })
+
+  it('maps store refusal codes to actionable messages', async () => {
+    const ctx = {
+      get(service: string) {
+        if (service === 'attachments') {
+          return {
+            saveImage: async () => {
+              throw new AttachmentError('too big', 'IMAGE_TOO_LARGE')
+            },
+          }
+        }
+        return undefined
+      },
+    }
+    let message = ''
+    try {
+      await saveScreenshot(ctx as never, Buffer.from('x'), undefined)
+    } catch (error) {
+      message = (error as Error).message
+    }
+    expect(message.startsWith('browser-verify: ')).toBe(true)
+    expect(message).toContain('fullPage')
+    expect(message).toMatch(/重试/)
+  })
+
+  it('fails actionably when the model route is unresolvable', async () => {
+    const ctx = { get: () => undefined }
+    let message = ''
+    try {
+      await assertImageCapable(ctx as never, {})
+    } catch (error) {
+      message = (error as Error).message
+    }
+    expect(message.startsWith('browser-verify: ')).toBe(true)
+    expect(message).toMatch(/重试/)
   })
 })

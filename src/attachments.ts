@@ -60,13 +60,13 @@ export async function saveScreenshot(ctx: Context, data: Buffer, name: string | 
   } catch (error: unknown) {
     if (!(error instanceof AttachmentError)) throw error
     if (error.code === 'IMAGE_TOO_LARGE') {
-      throw new Error('browser-verify: 截图超过 attachment 存储字节上限。请改用 fullPage:false 或调低 deviceScaleFactor 后重试。')
+      throw new Error('browser-verify: 截图超过 attachment 存储字节上限。请改用 fullPage:false 或调低 deviceScaleFactor 后重试。', { cause: error })
     }
     if (error.code === 'IMAGE_DIMENSION_TOO_LARGE' || error.code === 'IMAGE_TOO_MANY_PIXELS') {
-      throw new Error('browser-verify: 截图尺寸超过 attachment 存储限制。请改用 fullPage:false 或调低 deviceScaleFactor 后重试。')
+      throw new Error('browser-verify: 截图尺寸超过 attachment 存储限制。请改用 fullPage:false 或调低 deviceScaleFactor 后重试。', { cause: error })
     }
     if (error.code === 'IMAGE_TYPE_MISMATCH') {
-      throw new Error(`browser-verify: 截图格式校验失败: ${error.message}`)
+      throw new Error(`browser-verify: 截图格式校验失败：${error.message} 请改用 fullPage:false 后重试。`, { cause: error })
     }
     throw error
   }
@@ -82,7 +82,7 @@ export async function assertImageCapable(
   const model = routed?.model ?? exec.agent?.options?.model
   const llm = ctx.get('llm')
   if (provider === undefined || model === undefined || llm === undefined) {
-    throw new Error('browser-verify: 无法解析当前模型路由，无法判断图片输入能力。')
+    throw new Error('browser-verify: 无法解析当前模型路由（或模型服务未挂载），无法判断图片输入能力。请检查当前会话的模型路由配置后重试。')
   }
   const active = await llm.resolveModelInfo(provider, model)
   if (active.inputModalities === undefined || !active.inputModalities.includes('image')) {
