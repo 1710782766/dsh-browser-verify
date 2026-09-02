@@ -158,7 +158,7 @@ export class BrowserDriver {
         headless: true,
       })
       const browser = persistent.browser()
-      if (browser === null) throw new Error('browser-verify: 持久化上下文未返回浏览器实例。')
+      if (browser === null) throw new Error('browser-verify: 持久化上下文未返回浏览器实例。请检查 DSH_BROWSER_VERIFY_CHROMIUM 指向的浏览器，或重新执行 npx playwright install chromium。')
       this.browser = browser
     } catch (error) {
       throw this.wrapError(error, '浏览器启动失败', '请检查 DSH_BROWSER_VERIFY_CHROMIUM 指向的浏览器路径，或重新执行 npx playwright install chromium。')

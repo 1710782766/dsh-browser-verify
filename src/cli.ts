@@ -23,7 +23,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
   const opts: CliOptions = { url: '', viewport: { width: 390, height: 844 } }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
-    const next = (): string => { const v = argv[++i]; if (v === undefined) throw new Error(`--${arg} 需要参数`); return v }
+    const next = (): string => { const v = argv[++i]; if (v === undefined) throw new Error(`browser-verify: 参数 --${arg} 缺少值。请按 --url <url> 的用法补充。`); return v }
     if (arg === '--url') opts.url = next()
     else if (arg === '--mock') opts.mockFile = next()
     else if (arg === '--wait-selector') opts.waitSelector = next()
@@ -33,9 +33,9 @@ export function parseCliArgs(argv: string[]): CliOptions {
     else if (arg === '--viewport') {
       const [w, h] = next().split('x').map(Number)
       opts.viewport = { width: w, height: h }
-    } else throw new Error(`未知参数: ${arg}`)
+    } else throw new Error(`browser-verify: 未知参数 --${arg}。请检查命令行用法（--url/--mock/--assert/--screenshot/--persist/--viewport）。`)
   }
-  if (opts.url === '') throw new Error('browser-verify cli: 缺少 --url')
+  if (opts.url === '') throw new Error('browser-verify: 缺少 --url。请提供页面地址，如 --url http://localhost:5173/hweb/#/pages/lyp/livingPayment。')
   return opts
 }
 
@@ -44,9 +44,15 @@ async function main(): Promise<void> {
   // Deviation D8-4: read the fixture before opening, then pass it as
   // startScenario `mocks` so it is registered before the first navigation
   // (the app boot may bounce to a fallback route if unmocked APIs answer).
-  const rule = opts.mockFile === undefined
-    ? null
-    : JSON.parse(await readFile(opts.mockFile, 'utf8')) as { urlPattern: string; json: unknown; status?: number }
+  let rule: { urlPattern: string; json: unknown; status?: number } | null = null
+  if (opts.mockFile !== undefined) {
+    try {
+      rule = JSON.parse(await readFile(opts.mockFile, 'utf8')) as { urlPattern: string; json: unknown; status?: number }
+    } catch (error) {
+      const raw = error instanceof Error ? error.message : String(error)
+      throw new Error(`browser-verify: 读取 --mock 文件失败: ${raw}。请检查文件路径与 JSON 格式。`)
+    }
+  }
   const driver = new BrowserDriver({ viewport: opts.viewport })
   try {
     const opened = await driver.startScenario({

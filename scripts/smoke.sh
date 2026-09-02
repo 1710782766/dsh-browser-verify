@@ -20,4 +20,4 @@ echo "--- garbage diff ---"
 diff -r "$TMP_BEFORE" "$TMP_AFTER" || echo "残留差异见上（预期：无——CLI 默认截图在 pid 临时目录内，dispose 时删除）"
 rm -rf "$TMP_BEFORE" "$TMP_AFTER"
 echo "--- zombie chromium ---"
-ps -Ao pid=,command= | grep -c "$TMP_ROOT/dsh-browser-verify-" || true
+ps -Ao pid=,command= | grep -c "$TMP_ROOT/[d]sh-browser-verify-" || true
