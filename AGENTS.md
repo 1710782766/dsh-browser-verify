@@ -36,9 +36,13 @@ DeepSeek Harness 宿主插件：给模型四件只读浏览器验证工具（`br
                             env 覆盖 DSH_BROWSER_VERIFY_CHROMIUM；找不到 throw 安装提示
     src/cleanup.ts         纯解析：parseZombiePids（ps 文本→本前缀 pid）、
                             selectOrphanDirs（前缀+超龄+mtime 降序）
-    src/browser/scenario.ts   纯函数（assertNoMockConflict/normalizeCountSpec/
+    src/browser/scenario.ts   纯函数（assertNoMockConflict/normalizeCountSpec/isNoiseText/
                             summarizeVisibleText/capConsoleErrors/sha256Hex/textDiff）
-                            + Scenario 类（page/context/mocks/assert/screenshot 去重）
+                            + Scenario 类（page/context/mocks/assert/screenshot 去重；
+                            navigate：未传 waitSelector 时默认等渲染稳定后才采样——
+                            连续两次相同非空可见文本即稳定，间隔 250ms、上限
+                            min(timeoutMs, 3000)，持续变化页则采当前态不抛错；
+                            summarizeVisibleText 过滤加载态噪音 NOISE_TEXT_PATTERN）
     src/browser/driver.ts    进程内惰性单例（launchPersistentContext + 自管
                             userDataDir）、单一验证场景、FIFO chain 锁、空闲回收、
                             disposed 守卫、chained dispose、wrapError、close 失败
@@ -136,8 +140,9 @@ DeepSeek Harness 宿主插件：给模型四件只读浏览器验证工具（`br
 - **参考应用 hhhweb**：uni-app hash 路由（`/hweb/#/pages/lyp/livingPayment`）；
   响应信封 `{status, result}`（`{code,data}` 会进解密分支白屏）；缴费列表项
   真实键 `wegType/name/info`；空态 `.empty-wrap`、条目 `.grid-item`（初始为
-  加载骨架，textContent 仅"查看详情"——断言需等真实条目）；boot 即 3 个
-  `*.do*` 接口。
+  加载骨架，textContent 仅"查看详情"，boot 伴 showLoading 文案"加载中..."——
+  0.1.3 起 open 默认稳定等待 + 噪音过滤后快照为渲染后状态；断言仍建议等
+  真实条目）；boot 即 3 个 `*.do*` 接口。
 - **单机假设**：启动清扫仅处理超龄本前缀 pid 目录；同机多实例安全。
 - **平台**：已验证 macOS arm64（`SUBDIRS` 为 arm64 布局）；其他平台走
   DSH_BROWSER_VERIFY_CHROMIUM。

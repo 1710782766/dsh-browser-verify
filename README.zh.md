@@ -12,7 +12,7 @@
 ## 快速上手
 
 ```sh
-dsh plugin --profile web add dsh-browser-verify@0.1.2
+dsh plugin --profile web add dsh-browser-verify@0.1.3
 ```
 
 1. **安装**（更多方式见 [安装](#安装)）。
@@ -36,7 +36,7 @@ browser_assert  selector=".empty-wrap" text="暂无可用缴费服务"
 
 | 工具                   | 用途                                                                                                                                                                                                                                                       |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `browser_open`       | 在全新场景中打开 URL（无头 Chromium，默认视口 390×844 @2x），返回 title / HTTP 状态 / 可见文本摘要 / console 错误。可选`waitSelector` 等待关键元素出现后再返回；可选内联 `mocks` 在**首次导航前**拦截接口——用于一启动就依赖 mock 数据的页面。 |
+| `browser_open`       | 在全新场景中打开 URL（无头 Chromium，默认视口 390×844 @2x），返回 title / HTTP 状态 / 可见文本摘要 / console 错误。不传 `waitSelector` 时默认等待页面**渲染稳定**后再采样（连续两次相同可见文本即稳定，上限约 3s），不会采到启动骨架帧；`加载中...` 等加载态文案自动过滤。可选 `waitSelector` 等待关键元素出现后再返回；可选内联 `mocks` 在**首次导航前**拦截接口——用于一启动就依赖 mock 数据的页面。 |
 | `browser_mock`       | 注册 playwright glob 路由（如`**/api/*.do*`）返回指定 JSON，并自动 reload 页面展示 mock 状态——不碰后端最快验证空态/异常态。重复 pattern 会提示报错。                                                                                                   |
 | `browser_assert`     | 最省 token 也最精确的验证：等待 CSS 选择器出现，校验数量与包含文本，返回`{pass, count, actualText, elapsedMs}`。不满足时返回 `pass:false`（附差异），**绝不抛错**——失败是一等公民的结果，而不是要调试的异常。                                  |
 | `browser_screenshot` | 截取当前页面（视口或整页），**自动以 image block 投影到模型上下文**——模型直接"看见"版式，无需任何文件处理。返回尺寸、sha256；与上一张完全一致时 `identicalToPrevious:true`（疑似页面未刷新）。                                                   |
@@ -61,7 +61,7 @@ browser_screenshot
 ## 安装
 
 ```sh
-dsh plugin --profile web add dsh-browser-verify@0.1.2
+dsh plugin --profile web add dsh-browser-verify@0.1.3
 ```
 
 版本故意钉死：pnpm 11 会暂缓 24 小时内新发布的包，裸写 `add dsh-browser-verify`（latest）会在发布当天装到上一个版本。`--profile web`
@@ -101,7 +101,7 @@ npx playwright install chromium     # 需要 playwright-core@1.62.0
 
 ## 测试状态
 
-39 个单测（完全离线，无需浏览器）、严格 typecheck、每文件 ≥90% 语句覆盖率闸门。已在 **dsh 0.1.2-alpha.4 真实 GUI 端到端验证**：对一个真实 uni-app H5（hhhweb），空态+正常态两态闭环共 6 次调用，截图自动投影，无临时目录残留、无僵尸进程。
+41 个单测（完全离线，无需浏览器）、严格 typecheck、每文件 ≥90% 语句覆盖率闸门。已在 **dsh 0.1.2-alpha.4 真实 GUI 端到端验证**：对一个真实 uni-app H5（hhhweb），空态+正常态两态闭环共 6 次调用，截图自动投影，无临时目录残留、无僵尸进程。
 
 ## 已知限制
 

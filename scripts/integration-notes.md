@@ -2,6 +2,26 @@
 
 > 状态：Step 1–5 ✅ 全部完成（Step 3–4 在本会话内闭环验证；宿主已更新至 0.1.2-alpha.4 后实测）。
 
+## 0.1.3 复验 — 快照时机 + 噪音过滤 ✅（用户体验报告驱动）
+
+用户实测反馈两点：① 第二次 open（未传 waitSelector）返回 `visible: []`（uni-app
+启动早期采样）；② 摘要混入 showLoading 残留"加载中..."。定性为 **open 快照时机
+偏早 + 加载态噪音**，修复为：未传 waitSelector 时默认等渲染稳定（连续两次相同非空
+可见文本采样，间隔 250ms、上限 min(timeoutMs, 3000)），`summarizeVisibleText`
+过滤 `NOISE_TEXT_PATTERN`（加载中/正在加载/请稍候/loading，全串锚定，不伤
+加载失败/加载更多等业务态）。
+
+实机复现与修复后验证（hhhweb :5173 真实态 URL + 两态 mock）：
+
+| 场景 | 0.1.2（修复前） | 0.1.3（修复后） |
+|---|---|---|
+| open 无 waitSelector（真实态 uid/rid） | `visible: []`, 502ms | `["我的缴费","便捷生活 从缴费开始","暂无可用缴费服务"]`, 1440ms |
+| open `waitSelector='.header'`（真实态） | visible 混入 `"加载中..."` | 无噪音（settle 后采样 + 过滤双保险） |
+| smoke 空态 / 正常态 / 无 wait-selector 回归护栏 | — | 三条全过；无残留、无僵尸（沙箱禁 ps 时降级 0） |
+
+单测 39 → 41（新增 isNoiseText / summarize 噪音过滤两例）；工具描述与 README ×2
+同步；版本 0.1.3。
+
 ## Step 1 — 构建并装载（pnpm link，免 pack）✅
 
 ```bash

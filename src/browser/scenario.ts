@@ -34,6 +34,20 @@ const MAX_VISIBLE_LEN = 40
 const MAX_ERRORS = 5
 const MAX_ERROR_LEN = 120
 const MAX_DIFF_LEN = 120
+/** Poll interval and cap for the default render-settled wait (no waitSelector). */
+const SETTLE_INTERVAL_MS = 250
+const SETTLE_CAP_MS = 3000
+/**
+ * Loading-state noise (uni-app showLoading / boot toasts) filtered out of the
+ * visible summary. Anchored full-string patterns only, so business states like
+ * 加载失败 / 加载更多 are never affected.
+ */
+const NOISE_TEXT_PATTERN = /^(加载中|正在加载|请稍候|loading)[.…]{0,3}$/i
+
+/** True for transient loading-state text that should not pollute the summary. */
+export function isNoiseText(text: string): boolean {
+  return NOISE_TEXT_PATTERN.test(text)
+}
 
 export function assertNoMockConflict(patterns: string[], next: string): void {
   if (patterns.includes(next)) {
@@ -52,7 +66,7 @@ export function summarizeVisibleText(texts: string[]): string[] {
   const out: string[] = []
   for (const raw of texts) {
     const trimmed = raw.trim()
-    if (trimmed === '') continue
+    if (trimmed === '' || isNoiseText(trimmed)) continue
     const reduced = trimmed.length > MAX_VISIBLE_LEN ? trimmed.slice(0, MAX_VISIBLE_LEN) : trimmed
     if (seen.has(reduced)) continue
     seen.add(reduced)
@@ -106,6 +120,11 @@ export class Scenario {
     const response = await this.page.goto(opts.url, { waitUntil: 'domcontentloaded', timeout })
     if (opts.waitSelector !== undefined) {
       await this.page.waitForSelector(opts.waitSelector, { timeout })
+    } else {
+      // No explicit selector: wait for the page to render-settle instead of
+      // snapshotting the boot frame (SPAs like uni-app show skeleton/loading
+      // right after domcontentloaded — a 500ms snapshot reads empty).
+      await this.waitUntilRendered(timeout)
     }
     const texts = await this.page.evaluate(VISIBLE_TEXT_SCRIPT) as string[]
     return {
@@ -115,6 +134,27 @@ export class Scenario {
       visible: summarizeVisibleText(texts),
       consoleErrors: capConsoleErrors(errors),
       elapsedMs: Date.now() - started,
+    }
+  }
+
+  /**
+   * Default settle wait: two consecutive identical non-empty visible-text
+   * samples (250ms apart) mean the render stopped changing. Bounded by
+   * min(timeoutMs, 3s) — pages that never settle (polling/animations) fall
+   * through to the current snapshot instead of burning the whole budget.
+   */
+  private async waitUntilRendered(timeoutMs: number): Promise<void> {
+    const cap = Math.min(timeoutMs, SETTLE_CAP_MS)
+    const deadline = Date.now() + cap
+    let prev: string | null = null
+    for (;;) {
+      const sig = (await this.page.evaluate(VISIBLE_TEXT_SCRIPT) as string[]).join('\u0000')
+      if (sig !== '') {
+        if (prev !== null && sig === prev) return
+        prev = sig
+      }
+      if (Date.now() >= deadline) return
+      await new Promise(resolve => setTimeout(resolve, SETTLE_INTERVAL_MS))
     }
   }
 

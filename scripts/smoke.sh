@@ -14,6 +14,12 @@ node lib/cli.js --url 'http://localhost:5173/hweb/#/pages/lyp/livingPayment' \
   --mock tests/fixtures/mock-empty.json --wait-selector '.header' --assert '.empty-wrap' --screenshot
 node lib/cli.js --url 'http://localhost:5173/hweb/#/pages/lyp/livingPayment' \
   --mock tests/fixtures/mock-normal.json --wait-selector '.header' --assert '.grid-item' --screenshot
+# 0.1.3 regression guard: without --wait-selector the open must still snapshot
+# after the render settles (non-empty, no boot skeleton), not the early frame.
+OPEN_OUT=$(node lib/cli.js --url 'http://localhost:5173/hweb/#/pages/lyp/livingPayment' \
+  --mock tests/fixtures/mock-normal.json --assert '.grid-item' --screenshot)
+echo "$OPEN_OUT" | head -1 | grep -q '水费' || { echo 'FAIL: no-wait-selector open did not snapshot settled content'; exit 1; }
+echo '--- no-wait-selector open OK (settled, 水费 present) ---'
 sleep 1
 cp -R "$TMP_ROOT"/dsh-browser-verify-* "$TMP_AFTER/" 2>/dev/null || true
 echo "--- garbage diff ---"

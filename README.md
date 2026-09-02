@@ -18,7 +18,7 @@ verification is just tool calls.
 ## Quick start
 
 ```sh
-dsh plugin --profile web add dsh-browser-verify@0.1.2
+dsh plugin --profile web add dsh-browser-verify@0.1.3
 ```
 
 1. **Install** with the command above (or see [Install](#install)).
@@ -44,7 +44,7 @@ state?"; add `browser_screenshot` when you need to see the layout, or
 
 | Tool | Purpose |
 |---|---|
-| `browser_open` | Open a URL in a fresh scenario (headless Chromium, default viewport 390×844 @2x) and report title / HTTP status / visible-text summary / console errors. Optional `waitSelector` waits for a key element before returning, and optional inline `mocks` intercept APIs **before** the first navigation — for pages that boot against mocked data. |
+| `browser_open` | Open a URL in a fresh scenario (headless Chromium, default viewport 390×844 @2x) and report title / HTTP status / visible-text summary / console errors. Without `waitSelector` it waits for the page to render-settle (two identical consecutive visible-text samples, capped at ~3s) before snapshotting, so it never returns the boot/skeleton frame; loading-state noise (`加载中...` etc.) is filtered out of the summary. Optional `waitSelector` waits for a key element before returning, and optional inline `mocks` intercept APIs **before** the first navigation — for pages that boot against mocked data. |
 | `browser_mock` | Register a playwright-glob route (`**/api/*.do*`) returning your JSON, then auto-reload the page to show the mocked state — the quickest way to verify empty / error / abnormal states without touching the backend. Duplicate patterns are rejected with a hint. |
 | `browser_assert` | The cheapest and most precise check: wait for a CSS selector, verify its count and contained text, return `{pass, count, actualText, elapsedMs}`. A mismatch is `pass:false` (with the diff), never a throw — so failure is a first-class result, not an error you debug. |
 | `browser_screenshot` | Capture the current page (viewport or full page) and **auto-project the image block into the model context** — the model sees the layout without any file handling. Reports dimensions, sha256, and `identicalToPrevious:true` when the shot is byte-identical to the previous one (page probably not refreshed). |
@@ -69,7 +69,7 @@ browser_screenshot
 ## Install
 
 ```sh
-dsh plugin --profile web add dsh-browser-verify@0.1.2
+dsh plugin --profile web add dsh-browser-verify@0.1.3
 ```
 
 The version is pinned on purpose: pnpm 11 holds back packages published in the
@@ -120,7 +120,7 @@ first `browser_open` fails with an actionable install hint.
 
 ## Testing status
 
-39 unit tests (fully offline — no browser needed), strict typecheck, and a
+41 unit tests (fully offline — no browser needed), strict typecheck, and a
 per-file ≥90% statement coverage gate. Verified **end-to-end in the real DSH
 web GUI** on dsh 0.1.2-alpha.4: a two-state loop (empty + normal) against a
 live uni-app H5 (hhhweb) in 6 tool calls, with screenshots auto-projected and

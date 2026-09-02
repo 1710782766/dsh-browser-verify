@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assertNoMockConflict, capConsoleErrors, normalizeCountSpec, sha256Hex, summarizeVisibleText, textDiff } from '../src/browser/scenario.ts'
+import { assertNoMockConflict, capConsoleErrors, isNoiseText, normalizeCountSpec, sha256Hex, summarizeVisibleText, textDiff } from '../src/browser/scenario.ts'
 
 describe('scenario pure helpers', () => {
   it('rejects duplicate mock patterns with actionable message', () => {
@@ -18,6 +18,23 @@ describe('scenario pure helpers', () => {
     expect(out).toHaveLength(8)
     expect(out[0]).toBe('空')
     expect(out[1]).toHaveLength(40)
+  })
+
+  it('filters loading-state noise only; business states survive', () => {
+    expect(isNoiseText('加载中...')).toBe(true)
+    expect(isNoiseText('加载中')).toBe(true)
+    expect(isNoiseText('正在加载…')).toBe(true)
+    expect(isNoiseText('请稍候')).toBe(true)
+    expect(isNoiseText('Loading...')).toBe(true)
+    expect(isNoiseText('加载失败')).toBe(false)
+    expect(isNoiseText('加载更多')).toBe(false)
+    expect(isNoiseText('我的缴费')).toBe(false)
+  })
+
+  it('summarize drops noise and lets business text fill the 8-item cap', () => {
+    const out = summarizeVisibleText(['加载中...', '加载中...', '我的缴费', '便捷生活 从缴费开始', '水费', '查看详情', '128.00'])
+    expect(out.filter(isNoiseText)).toHaveLength(0)
+    expect(out).toEqual(['我的缴费', '便捷生活 从缴费开始', '水费', '查看详情', '128.00'])
   })
 
   it('caps console errors at 5 entries of 120 chars', () => {
