@@ -23,7 +23,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
   const opts: CliOptions = { url: '', viewport: { width: 390, height: 844 } }
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
-    const next = (): string => { const v = argv[++i]; if (v === undefined) throw new Error(`browser-verify: 参数 --${arg} 缺少值。请按 --url <url> 的用法补充。`); return v }
+    const next = (): string => { const v = argv[++i]; if (v === undefined) throw new Error(`browser-verify: 参数 ${arg} 缺少值。请按 --url <url> 的用法补充。`); return v }
     if (arg === '--url') opts.url = next()
     else if (arg === '--mock') opts.mockFile = next()
     else if (arg === '--wait-selector') opts.waitSelector = next()
@@ -33,7 +33,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
     else if (arg === '--viewport') {
       const [w, h] = next().split('x').map(Number)
       opts.viewport = { width: w, height: h }
-    } else throw new Error(`browser-verify: 未知参数 --${arg}。请检查命令行用法（--url/--mock/--assert/--screenshot/--persist/--viewport）。`)
+    } else throw new Error(`browser-verify: 未知参数 ${arg}。请检查命令行用法（--url/--mock/--assert/--screenshot/--persist/--viewport）。`)
   }
   if (opts.url === '') throw new Error('browser-verify: 缺少 --url。请提供页面地址，如 --url http://localhost:5173/hweb/#/pages/lyp/livingPayment。')
   return opts
