@@ -9,8 +9,9 @@ describe('buildLaunchArgs', () => {
   })
 
   it('never adds sandbox or remote-debugging flags', () => {
-    const args = buildLaunchArgs('/tmp/x', '/bin/chrome', false).join(' ')
-    expect(args).not.toContain('--no-sandbox')
-    expect(args).not.toContain('--remote-debugging')
+    const args = buildLaunchArgs('/tmp/x', '/bin/chrome', false)
+    expect(args).toContain('--headless=new')
+    expect(args.join(' ')).not.toContain('--no-sandbox')
+    expect(args.join(' ')).not.toContain('--remote-debugging')
   })
 })

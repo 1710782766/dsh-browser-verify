@@ -1,7 +1,7 @@
 /**
  * Browser driving: one lazy launch per process, one active verification
- * scenario, FIFO-serialized tool access, idle reclamation, hard kill on
- * dispose. launch args are pure for unit tests.
+ * scenario, FIFO-serialized tool access, idle reclamation, graceful close +
+ * temp dir removal on dispose. launch args are pure for unit tests.
  * @module dsh-browser-verify/browser/driver
  */
 
@@ -10,7 +10,7 @@ import { rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium, type Browser } from 'playwright-core'
-import { discoverBrowser, type DiscoveredBrowser } from './discover.ts'
+import { discoverBrowser } from './discover.ts'
 import { Scenario, type OpenResult } from './scenario.ts'
 
 export function buildLaunchArgs(userDataDir: string, executablePath: string, headlessShell: boolean): string[] {
@@ -23,7 +23,7 @@ export function buildLaunchArgs(userDataDir: string, executablePath: string, hea
 /** Best-effort SIGKILL of a pid and its descendants (macOS ps). */
 export async function killProcessTree(pid: number): Promise<void> {
   const out = await new Promise<string>((resolve) => {
-    exec('ps -Ao pid=,ppid=,command=', (error, stdout) => resolve(error ? String(error.message) : stdout))
+    exec('ps -Ao pid=,ppid=,command=', { maxBuffer: 10 * 1024 * 1024 }, (error, stdout) => resolve(error ? String(error.message) : stdout))
   })
   const children = new Map<number, number[]>()
   for (const line of out.split('\n')) {
@@ -50,6 +50,7 @@ export class BrowserDriver {
   private readonly userDataDir = join(tmpdir(), `dsh-browser-verify-${process.pid}`, 'profile')
   private idleTimer: NodeJS.Timeout | null = null
   private lockChain: Promise<unknown> = Promise.resolve()
+  private disposed = false
 
   constructor(
     private readonly opts: {
@@ -68,13 +69,41 @@ export class BrowserDriver {
     return run
   }
 
+  /** Reject new op entries once disposed; the engine cannot come back. */
+  private ensureNotDisposed(): void {
+    if (this.disposed) {
+      throw new Error('browser-verify: 验证引擎已停止。请重新调用 browser_open 开始新的验证。')
+    }
+  }
+
+  /** Normalize errors at the driver boundary: prefix + context + advice. */
+  private wrapError(error: unknown, context: string, advice: string): Error {
+    if (error instanceof Error && error.message.startsWith('browser-verify: ')) return error
+    const message = error instanceof Error ? error.message : String(error)
+    return new Error(`browser-verify: ${context}: ${message}。${advice}`)
+  }
+
   withScenario<T>(fn: (scenario: Scenario) => Promise<T>): Promise<T> {
-    return this.chain(() => fn(this.requireScenario()))
+    this.ensureNotDisposed()
+    return this.chain(async () => {
+      this.ensureNotDisposed()
+      this.resetIdleTimer()
+      try {
+        return await fn(this.requireScenario())
+      } catch (error) {
+        throw this.wrapError(error, '场景操作失败', '请 browser_open 重开场景后重试。')
+      }
+    })
   }
 
   /** Open a fresh verification scenario; per design, each open = new context+page. */
   async startScenario(reset: { url: string; waitSelector?: string; timeoutMs?: number }): Promise<OpenResult> {
-    return this.chain(() => this.openScenario(reset))
+    this.ensureNotDisposed()
+    return this.chain(async () => {
+      this.ensureNotDisposed()
+      this.resetIdleTimer()
+      return this.openScenario(reset)
+    })
   }
 
   private async openScenario(reset: { url: string; waitSelector?: string; timeoutMs?: number }): Promise<OpenResult> {
@@ -88,11 +117,15 @@ export class BrowserDriver {
     this.scenario = new Scenario(page, context)
     this.resetIdleTimer()
     try {
-      return await this.scenario.navigate(reset)
+      return await this.scenario.navigate({
+        url: reset.url,
+        waitSelector: reset.waitSelector,
+        timeoutMs: reset.timeoutMs ?? this.opts.timeoutMs,
+      })
     } catch (error) {
       await this.scenario.close()
       this.scenario = null
-      throw error
+      throw this.wrapError(error, '打开页面失败', '请检查 URL 是否可访问、页面是否可在超时内加载，必要时调大 DSH_BROWSER_VERIFY_TIMEOUT。')
     }
   }
 
@@ -102,12 +135,17 @@ export class BrowserDriver {
   }
 
   async ensureBrowser(): Promise<Browser> {
+    this.ensureNotDisposed()
     if (this.browser !== null) return this.browser
-    const found = (this.opts.discover ?? discoverBrowser)()
-    this.browser = await chromium.launch({
-      executablePath: found.executablePath,
-      args: buildLaunchArgs(this.userDataDir, found.executablePath, found.kind === 'headless-shell'),
-    })
+    try {
+      const found = (this.opts.discover ?? discoverBrowser)()
+      this.browser = await chromium.launch({
+        executablePath: found.executablePath,
+        args: buildLaunchArgs(this.userDataDir, found.executablePath, found.kind === 'headless-shell'),
+      })
+    } catch (error) {
+      throw this.wrapError(error, '浏览器启动失败', '请检查 DSH_BROWSER_VERIFY_CHROMIUM 指向的浏览器路径，或重新执行 npx playwright install chromium。')
+    }
     this.resetIdleTimer()
     return this.browser
   }
@@ -119,8 +157,19 @@ export class BrowserDriver {
     return this.scenario
   }
 
-  /** Reset on dispose: close everything, delete profile dir. */
+  /**
+   * Reset on dispose: mark disposed first (idempotent, blocks new ops), then
+   * run the teardown serialized on the FIFO chain so it waits out any
+   * in-flight op and cannot interleave with a launch or scenario op.
+   */
   async dispose(): Promise<void> {
+    if (this.disposed) return
+    this.disposed = true
+    await this.chain(() => this.teardown())
+  }
+
+  /** Best-effort teardown: close scenario + browser, delete the profile dir. */
+  private async teardown(): Promise<void> {
     if (this.idleTimer !== null) { clearTimeout(this.idleTimer); this.idleTimer = null }
     const scenario = this.scenario
     this.scenario = null
