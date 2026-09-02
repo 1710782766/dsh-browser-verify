@@ -61,7 +61,7 @@ browser_screenshot  name="livingPayment-empty" fullPage=false
 | 变量 | 默认值 | 含义 |
 |---|---|---|
 | `DSH_BROWSER_VERIFY_CHROMIUM` | （未设置） | Chromium 二进制完整路径，优先级高于缓存探测；启动时校验存在性，路径有误会给出提示。 |
-| `DSH_BROWSER_VERIFY_TIMEOUT` | `10000` | 单次调用的超时（ms）：页面加载 / 等待选择器 / mock reload；同时包裹每次工具调用。 |
+| `DSH_BROWSER_VERIFY_TIMEOUT` | `10000` | 超时（ms）：页面加载 / 等待选择器 / mock reload；仅包裹 `browser_open` 的页面加载路径（其余三个工具仅 FIFO 串行，无墙钟超时）。 |
 | `DSH_BROWSER_VERIFY_IDLE_MS` | `600000` | 空闲回收窗口（ms），到时自动关闭浏览器实例；插件 dispose 时无论如何会强制清理。 |
 
 ## 垃圾清理

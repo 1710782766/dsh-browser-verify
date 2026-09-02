@@ -64,7 +64,7 @@ browser_screenshot  name="livingPayment-empty" fullPage=false
 | Variable | Default | Meaning |
 |---|---|---|
 | `DSH_BROWSER_VERIFY_CHROMIUM` | *(unset)* | Full path to a Chromium binary; wins over cache probing. Checked for existence — startup fails with a hint if the path is wrong. |
-| `DSH_BROWSER_VERIFY_TIMEOUT` | `10000` | Per-call timeout (ms) for page load / wait-selector / mock reload; also wraps each tool call. |
+| `DSH_BROWSER_VERIFY_TIMEOUT` | `10000` | Timeout (ms) for page load / wait-selector / mock reload; wraps `browser_open`'s page-load path only (the other tools are FIFO-serialized without a wall-clock timeout). |
 | `DSH_BROWSER_VERIFY_IDLE_MS` | `600000` | Idle window (ms) before the browser instance auto-closes; plugin dispose force-cleans in any case. |
 
 ## Garbage cleanup

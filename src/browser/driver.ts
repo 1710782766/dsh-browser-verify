@@ -147,7 +147,7 @@ export class BrowserDriver {
     this.ensureNotDisposed()
     if (this.browser !== null) return this.browser
     try {
-      const found = (this.opts.discover ?? discoverBrowser)()
+      const found = (this.opts.discover ?? discoverBrowser)({ overridePath: process.env.DSH_BROWSER_VERIFY_CHROMIUM ?? undefined })
       // Deviation D8-3: launchPersistentContext is the only launch path that
       // puts our predictable temp dir on the chromium command line
       // (`--user-data-dir` is appended by playwright itself), which the
