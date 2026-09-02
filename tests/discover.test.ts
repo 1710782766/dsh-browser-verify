@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { discoverBrowser, KNOWN_REVISIONS } from '../src/browser/discover.ts'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { defaultCacheDir, discoverBrowser, KNOWN_REVISIONS } from '../src/browser/discover.ts'
 
 const CACHE = '/cache'
 const LIST = ['chromium_headless_shell-1234', 'chromium-1234', 'chromium-1200']
@@ -60,6 +63,16 @@ describe('discoverBrowser', () => {
   it('throws an actionable message when nothing is found', () => {
     expect(() => discoverBrowser({ cacheDir: CACHE, entries: [], exists: existsAll }))
       .toThrow(/npx playwright install chromium/)
+  })
+
+  it('defaults the cache dir to the macOS playwright cache', () => {
+    expect(defaultCacheDir()).toBe(join(homedir(), 'Library', 'Caches', 'ms-playwright'))
+  })
+
+  it('throws with an install hint when the cache dir cannot be read', () => {
+    const missing = join(tmpdir(), 'dsh-browser-verify-t10-no-such-dir')
+    expect(() => discoverBrowser({ cacheDir: missing, exists: () => true }))
+      .toThrow(/未找到浏览器缓存目录/)
   })
 
   it('exposes the known revision table', () => {
