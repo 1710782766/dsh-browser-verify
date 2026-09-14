@@ -110,3 +110,25 @@ cd /Users/dongshuai/Desktop/AIWorks/deepseek-harness && pnpm dsh --profile web -
 - 转码事实与线上事故逐位吻合（缩放系数 0.95396 → 2442×1717）：**`ref.mediaType` 即实际存储格式**。
 - `SCREENSHOT_MEDIA_TYPES` 四值 = 宿主 `ImageMediaType`（`satisfies` 编译期校验，宿主改契约即报错）。
 - 离线回归：`screenshotValueFrom` 全字段直通（jpeg/webp/originalDimensions）+ 信封标注原图尺寸 + schema enum 四值。
+
+## 0.1.5 上线复验 — 已发布包 + 真宿主（事故场景回归）✅
+
+用户按 registry 安装 + 重启宿主后，在**全新会话**里重放事故场景（即 0.1.4 会写坏引用
+并拖垮会话的那一次）：
+
+```bash
+dsh plugin --profile web add dsh-browser-verify@0.1.5   # profile 钉扎 0.1.5；node_modules 实装 0.1.5
+```
+
+| 项 | 实测（1280×900 @2 = 2560×1800 = 4,608,000 px > 预算 2048²） |
+|---|---|
+| 工具返回信封 | `image/jpeg, 2442x1717 px（原图 2560x1800，已按宿主预算缩放）, 35696 bytes, sha256 cead88b696f7` |
+| 附件 ref 元信息 | `2442x1717px, image/jpeg`（与信封逐项一致，无"声明 PNG / 实存 JPEG"矛盾） |
+| 会话存活性 | 截图后同会话继续执行工具调用成功（退出码 0）—— 无 `ATTACHMENT_CORRUPT`、无 TRANSPORT 重试 |
+| 打包产物静态核对 | `image/jpeg`×1 / `image/webp`×1 / `originalDimensions`×8 / `已按宿主预算缩放`×1（硬编码残留为 0） |
+
+- 页面侧无关结论的观察：无头上下文访问 `http://127.0.0.1:3080` 返回 401
+  （`dsh web authentication required`）——像素预算超限与画面内容无关，闭环成立；
+  若要截图 GUI 本身须传 `dsh web` 打印的带 token URL。
+- 事故场景已从"必死"变为"正常降级并自述原图尺寸"，且验证发生在**已发布产物**而非
+  本地构建上（本地构建闭环见上一节）。
