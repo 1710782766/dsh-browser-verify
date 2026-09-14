@@ -18,7 +18,7 @@ verification is just tool calls.
 ## Quick start
 
 ```sh
-dsh plugin --profile web add dsh-browser-verify@0.1.4
+dsh plugin --profile web add dsh-browser-verify@0.1.5
 ```
 
 1. **Install** with the command above (or see [Install](#install)).
@@ -85,7 +85,7 @@ browser_screenshot
 ## Install
 
 ```sh
-dsh plugin --profile web add dsh-browser-verify@0.1.4
+dsh plugin --profile web add dsh-browser-verify@0.1.5
 ```
 
 The version is pinned on purpose: pnpm 11 holds back packages published in the

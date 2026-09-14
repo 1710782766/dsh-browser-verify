@@ -12,7 +12,7 @@
 ## 快速上手
 
 ```sh
-dsh plugin --profile web add dsh-browser-verify@0.1.4
+dsh plugin --profile web add dsh-browser-verify@0.1.5
 ```
 
 1. **安装**（更多方式见 [安装](#安装)）。
@@ -74,7 +74,7 @@ browser_screenshot
 ## 安装
 
 ```sh
-dsh plugin --profile web add dsh-browser-verify@0.1.4
+dsh plugin --profile web add dsh-browser-verify@0.1.5
 ```
 
 版本故意钉死：pnpm 11 会暂缓 24 小时内新发布的包，裸写 `add dsh-browser-verify`（latest）会在发布当天装到上一个版本。`--profile web`

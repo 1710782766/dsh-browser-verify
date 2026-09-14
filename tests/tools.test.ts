@@ -19,4 +19,20 @@ describe('registerBrowserTools', () => {
     expect(registered[2].parameters.required).toContain('selector')
     expect(registered[3].parameters.properties.fullPage).toBeDefined()
   })
+
+  it('accepts every media type the store can publish for a screenshot', () => {
+    // The store re-encodes above its normalization budget, and defineTool
+    // validates the returned value against this schema: a PNG-only enum would
+    // reject a normalized JPEG/WebP capture at the return-value boundary.
+    const registered: Array<{ output: any }> = []
+    const ctx = {
+      tools: { register: (tool: any) => registered.push(tool) },
+      get: () => undefined,
+      effect: () => () => {},
+      emit: () => {},
+    }
+    registerBrowserTools(ctx as any)
+    expect(registered[3].output.schema.properties.image.properties.mediaType.enum)
+      .toEqual(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
+  })
 })

@@ -52,9 +52,12 @@ DeepSeek Harness 宿主插件：给模型四件只读浏览器验证工具（`br
                             disposed 守卫、chained dispose、wrapError、close 失败
                             时 ps-SIGKILL 兜底（硬杀仅按本实例精确 user-data-dir）
     src/attachments.ts        saveScreenshot（saveImage + AttachmentError 码表翻译
-                            + {cause}）+ renderScreenshotBlocks（text 信封 +
-                            image block）+ assertImageCapable（模型能力闸门，
-                            文本模型引导改用 browser_assert——最省 token）
+                            + {cause}）+ screenshotValueFrom（工具返回值的唯一来源：
+                            mediaType/bytes/宽高/originalDimensions 全部直通 store ref）
+                            + imageRefFromValue + SCREENSHOT_MEDIA_TYPES（宿主四格式，
+                            satisfies 编译期校验）+ renderScreenshotBlocks（text 信封 +
+                            image block，宿主缩放时标注原图尺寸）+ assertImageCapable
+                            （模型能力闸门，文本模型引导改用 browser_assert——最省 token）
     src/tools/index.ts       defineTool 四件套（描述为最终交付文案）；DSH_* env
                             （numberFromEnv 消毒）；每次注册一个 BrowserDriver
     src/tools/timeout.ts     withTimeout（弃赛者不 await）
@@ -154,5 +157,13 @@ DeepSeek Harness 宿主插件：给模型四件只读浏览器验证工具（`br
   （launchPersistentContext + `--headless=new` 实机验证，0.1.4）；系统浏览器候选
   枚举覆盖 darwin/linux/win32 常见路径与 `$PATH`（纯函数单测覆盖，非 macOS 实机
   未验——异常时仍建议 DSH_BROWSER_VERIFY_CHROMIUM）。
+- **禁止重述宿主归一化产物（0.1.5 线上事故）**：attachment store 在超过归一化预算
+  （默认 2048×2048 像素）时会把截图缩放并转码——JPEG，源带 alpha 则 WebP——**返回的
+  ref 才是唯一真相**（`ref.mediaType` / `ref.originalDimensions`）。插件若把格式或尺寸
+  写成常量，历史里就留下"声明 PNG、实存 JPEG"的自相矛盾引用；宿主 read 路径逐项比对
+  probe 结果后抛 `ATTACHMENT_CORRUPT`（`attachment-local/src/store.ts`），而历史不可变
+  → 该会话此后每次模型请求必败（表现为 TRANSPORT 重试 5 次后失败，会话报废）。两处
+  必须同步：取 `ref.mediaType`（勿硬编码）与放宽 `output.schema` 的 enum（宿主按
+  schema 校验工具返回值，只改前者会在返回值边界违规）。
 - **ps 依赖**：cleanup/killProcessTree 路径依赖 `ps`——在禁用 ps 的沙箱内
   行为降级为无操作（冒烟中 `pgrep` 是替代证据）。

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { AttachmentError, AttachmentId } from '@deepseek-ai/dsh-attachment'
-import { assertImageCapable, imageRefFromValue, renderScreenshotBlocks, saveScreenshot } from '../src/attachments.ts'
+import { assertImageCapable, imageRefFromValue, renderScreenshotBlocks, saveScreenshot, screenshotValueFrom } from '../src/attachments.ts'
 
 describe('attachments', () => {
   it('brands a value into a durable attachment ref', () => {
@@ -27,6 +27,42 @@ describe('attachments', () => {
       sha256: 'sha256:abc', identicalToPrevious: true,
     })
     expect(blocks[0]).toMatchObject({ type: 'text', text: expect.stringMatching(/疑似页面未刷新/) })
+  })
+
+  it('copies every stored fact instead of restating the capture format', () => {
+    // Regression: the returned format used to be the literal 'image/png' while
+    // the store had normalized an oversized capture to JPEG, so the reference
+    // written into history disagreed with the stored bytes (the read path
+    // re-derives them) and every later request on that session failed.
+    const value = screenshotValueFrom({
+      attachmentId: AttachmentId('sha256:abc'), mediaType: 'image/jpeg',
+      bytes: 580417, width: 2442, height: 1717, originalDimensions: { width: 2560, height: 1800 },
+    }, 'sha256:abc', false)
+    expect(value.image).toEqual({
+      attachmentId: 'sha256:abc', mediaType: 'image/jpeg',
+      bytes: 580417, width: 2442, height: 1717, originalDimensions: { width: 2560, height: 1800 },
+    })
+  })
+
+  it('publishes a WebP re-encode (alpha capture) and names the downscale', () => {
+    const value = screenshotValueFrom({
+      attachmentId: AttachmentId('sha256:alpha'), mediaType: 'image/webp',
+      bytes: 1200, width: 1024, height: 512, originalDimensions: { width: 1280, height: 640 },
+    }, 'sha256:alpha', false)
+    const blocks = renderScreenshotBlocks(value)
+    expect(blocks[0]).toMatchObject({ text: expect.stringContaining('image/webp, 1024x512 px（原图 1280x640，已按宿主预算缩放）') })
+    expect(blocks[1]).toMatchObject({
+      type: 'image',
+      attachment: { mediaType: 'image/webp', width: 1024, height: 512, originalDimensions: { width: 1280, height: 640 } },
+    })
+  })
+
+  it('leaves the envelope untouched when the store did not rescale', () => {
+    const value = screenshotValueFrom({
+      attachmentId: AttachmentId('sha256:plain'), mediaType: 'image/png',
+      bytes: 10, width: 390, height: 844,
+    }, 'sha256:plain', false)
+    expect(renderScreenshotBlocks(value)[0]).toMatchObject({ text: expect.stringContaining('image/png, 390x844 px, 10 bytes') })
   })
 
   it('maps store refusal codes to actionable messages', async () => {
@@ -93,13 +129,18 @@ describe('attachments', () => {
       height: 844,
       name: 'empty.png',
     }
+    let submitted: { mediaType?: string } = {}
     const ctx = {
       get(service: string) {
-        if (service === 'attachments') return { saveImage: async () => saved }
+        if (service === 'attachments') {
+          return { saveImage: async (input: { mediaType?: string }) => { submitted = input; return saved } }
+        }
         return undefined
       },
     }
     await expect(saveScreenshot(ctx as never, Buffer.from('x'), 'empty.png')).resolves.toBe(saved)
+    // Playwright really does capture PNG: the declaration is the request, not the result.
+    expect(submitted.mediaType).toBe('image/png')
   })
 
   it('fails actionably when the attachment store is not mounted', async () => {

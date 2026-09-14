@@ -96,3 +96,17 @@ cd /Users/dongshuai/Desktop/AIWorks/deepseek-harness && pnpm dsh --profile web -
 - tmpdir 内仅存在当前宿主的活动浏览器目录 `dsh-browser-verify-<宿主pid>`（chrome 为该宿主直属子进程，profile 于本会话创建；空闲 10 min 由 driver 回收，宿主优雅退出时 dispose 删除）。
 - 无孤儿目录/僵尸进程（无"宿主已死但浏览器存活"的实例——本轮宿主重启未产生残留：重启发生在插件装载前，旧宿主退出时浏览器由 idle/dispose 闭环）。
 - 附件库内容寻址、同图幂等；本轮增量 = 2 张截图。
+
+## 0.1.5 复验 — 附件格式直通（宿主归一化闭环）✅
+
+对 `attachment-local` **真实源码**（checkout：`prepareImageFile` / `readImageFile` / `normalizedImagePath`）跑桌面级截图闭环
+（`/tmp` 脚本，非仓库产物）：
+
+| 提交 | store 返回 ref | 宿主 read 校验 |
+|---|---|---|
+| 2560×1800 PNG（1280×900 @2 = 4,608,000 px > 预算 2048² = 4,194,304） | `image/jpeg` 2442×1717 / 25,052 B / `originalDimensions{2560,1800}` | 修复后 ref **PASS**；0.1.4 ref（格式重述 png）**FAIL `ATTACHMENT_CORRUPT`**（"Stored attachment metadata does not match its reference."） |
+| 2560×1800 透明 PNG（alpha） | `image/webp` 2442×1717 | ——（证明只放宽到 jpeg 不够） |
+
+- 转码事实与线上事故逐位吻合（缩放系数 0.95396 → 2442×1717）：**`ref.mediaType` 即实际存储格式**。
+- `SCREENSHOT_MEDIA_TYPES` 四值 = 宿主 `ImageMediaType`（`satisfies` 编译期校验，宿主改契约即报错）。
+- 离线回归：`screenshotValueFrom` 全字段直通（jpeg/webp/originalDimensions）+ 信封标注原图尺寸 + schema enum 四值。

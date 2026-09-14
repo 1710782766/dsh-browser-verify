@@ -7,7 +7,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { BrowserDriver } from '../browser/driver.ts'
-import { assertImageCapable, renderScreenshotBlocks, saveScreenshot } from '../attachments.ts'
+import { assertImageCapable, renderScreenshotBlocks, saveScreenshot, SCREENSHOT_MEDIA_TYPES, screenshotValueFrom } from '../attachments.ts'
 import { withTimeout } from './timeout.ts'
 
 /** Parse a positive-integer env var; NaN/zero/negative falls back to the default. */
@@ -150,11 +150,19 @@ export function registerBrowserTools(ctx: Context): void {
             required: true,
             properties: {
               attachmentId: { type: 'string', required: true },
-              mediaType: { type: 'string', enum: ['image/png'], required: true },
+              mediaType: { type: 'string', enum: [...SCREENSHOT_MEDIA_TYPES], required: true },
               bytes: { type: 'integer', required: true },
               width: { type: 'integer', required: true },
               height: { type: 'integer', required: true },
               name: { type: 'string' },
+              originalDimensions: {
+                type: 'object',
+                additionalProperties: false,
+                properties: {
+                  width: { type: 'number', required: true },
+                  height: { type: 'number', required: true },
+                },
+              },
             },
           },
           sha256: { type: 'string', required: true },
@@ -168,18 +176,8 @@ export function registerBrowserTools(ctx: Context): void {
       return driver.withScenario(async scenario => {
         const shot = await scenario.screenshot({ fullPage: args.fullPage })
         const ref = await saveScreenshot(ctx, shot.data, args.name)
-        return {
-          image: {
-            attachmentId: String(ref.attachmentId),
-            mediaType: 'image/png' as const,
-            bytes: ref.bytes,
-            width: ref.width,
-            height: ref.height,
-            ...ref.name === undefined ? {} : { name: ref.name },
-          },
-          sha256: shot.sha256,
-          identicalToPrevious: shot.identicalToPrevious,
-        }
+        // Facts come from the store ref: a normalized capture is no longer a PNG.
+        return screenshotValueFrom(ref, shot.sha256, shot.identicalToPrevious)
       })
     },
   }))

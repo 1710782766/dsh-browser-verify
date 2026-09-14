@@ -10,6 +10,16 @@ import type { ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attach
 import { AttachmentError, AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 
+/**
+ * Formats a stored screenshot can carry: Playwright captures PNG, and the
+ * attachment store re-encodes above its normalization budget (JPEG, or WebP
+ * when the source keeps alpha). Every entry is a possible store fact — never
+ * assume PNG.
+ */
+export const SCREENSHOT_MEDIA_TYPES = [
+  'image/png', 'image/jpeg', 'image/webp', 'image/gif',
+] as const satisfies readonly ImageMediaType[]
+
 export interface ScreenshotImage {
   attachmentId: string
   mediaType: ImageMediaType
@@ -17,6 +27,8 @@ export interface ScreenshotImage {
   width: number
   height: number
   name?: string
+  /** Present only when the store downscaled the capture; the pre-scaling pixels. */
+  originalDimensions?: { width: number; height: number }
 }
 
 export interface ScreenshotValue {
@@ -33,6 +45,39 @@ export function imageRefFromValue(image: ScreenshotImage): ImageAttachmentRef {
     width: image.width,
     height: image.height,
     ...image.name === undefined ? {} : { name: image.name },
+    ...image.originalDimensions === undefined ? {} : { originalDimensions: image.originalDimensions },
+  }
+}
+
+/**
+ * Build the tool value from the store reference alone. Every fact — format,
+ * byte length, dimensions — is copied from what the store actually published,
+ * because the read path re-derives them from the stored bytes and rejects any
+ * reference that disagrees. Restating a constant here (e.g. PNG for a capture
+ * the store normalized to JPEG) writes a self-contradicting attachment
+ * reference into immutable history, which fails every later model request.
+ * @param ref - reference returned by `saveImage`.
+ * @param sha256 - digest of the captured bytes.
+ * @param identicalToPrevious - whether this capture repeated the previous one.
+ * @returns the tool-facing value projected into the model context.
+ */
+export function screenshotValueFrom(
+  ref: ImageAttachmentRef,
+  sha256: string,
+  identicalToPrevious: boolean,
+): ScreenshotValue {
+  return {
+    image: {
+      attachmentId: String(ref.attachmentId),
+      mediaType: ref.mediaType,
+      bytes: ref.bytes,
+      width: ref.width,
+      height: ref.height,
+      ...ref.name === undefined ? {} : { name: ref.name },
+      ...ref.originalDimensions === undefined ? {} : { originalDimensions: ref.originalDimensions },
+    },
+    sha256,
+    identicalToPrevious,
   }
 }
 
@@ -40,10 +85,12 @@ export function renderScreenshotBlocks(value: ScreenshotValue): ContentBlock[] {
   const dup = value.identicalToPrevious
     ? '（与上一张截图哈希相同，疑似页面未刷新；请 browser_open 重开场景后重试）'
     : ''
+  const original = value.image.originalDimensions
+  const scaled = original === undefined ? '' : `（原图 ${original.width}x${original.height}，已按宿主预算缩放）`
   return [
     {
       type: 'text',
-      text: `<type>screenshot</type>\n<content>\n${value.image.mediaType}, ${value.image.width}x${value.image.height} px, ${value.image.bytes} bytes, sha256 ${value.sha256.slice(0, 12)}${dup}\n</content>`,
+      text: `<type>screenshot</type>\n<content>\n${value.image.mediaType}, ${value.image.width}x${value.image.height} px${scaled}, ${value.image.bytes} bytes, sha256 ${value.sha256.slice(0, 12)}${dup}\n</content>`,
     },
     { type: 'image', attachment: imageRefFromValue(value.image) },
   ]
