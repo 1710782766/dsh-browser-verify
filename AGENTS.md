@@ -133,6 +133,8 @@ DeepSeek Harness 宿主插件：给模型四件只读浏览器验证工具（`br
    安装成功 + `--dump-config` 出现 `# == dsh-browser-verify` 层。
 5. GitHub：topics 必含 `dsh-plugin`（生态抓取靠它），description 保持一句
    定位话；给 Release 附变更摘要。
+6. 推送由 agent 直接执行（用户 0.1.5 起授权）：`git push && git push --tags`；
+   `npm publish` 仍由用户执行——agent 沙箱写不了 `~/.npm`（缓存/日志 EPERM）。
 
 **安装路径事实（写文档/注释时不许再写错）**：
 - 已发布包名 `dsh-browser-verify`（无 scope）；`dsh plugin add <name>@<ver>`
