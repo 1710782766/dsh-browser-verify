@@ -10,19 +10,19 @@ browser verification in ≤4 tool calls: open, mock, assert, screenshot.
 
 Pages that change every day (H5 carousels, payment flows, admin consoles) are
 hard to verify by eye. This plugin lets the model drive a real headless
-browser through four tools — open a page, intercept its APIs, assert on the
-DOM, screenshot it — and the screenshot lands straight back into the model's
-context as an image. No terminal scripts, no browser bookkeeping: a
-verification is just tool calls.
+browser through five tools — open a page, reload it in place, intercept its
+APIs, assert on the DOM, screenshot it — and the screenshot lands straight back
+into the model's context as an image. No terminal scripts, no browser
+bookkeeping: a verification is just tool calls.
 
 ## Quick start
 
 ```sh
-dsh plugin --profile web add dsh-browser-verify@0.1.6
+dsh plugin --profile web add dsh-browser-verify@0.1.7
 ```
 
 1. **Install** with the command above (or see [Install](#install)).
-2. **Restart the GUI once** — plugins load at boot; the four tools become
+2. **Restart the GUI once** — plugins load at boot; the tools become
    visible only after the restart.
 3. **Open a new session** and tell the model — or call directly:
 
@@ -45,7 +45,8 @@ state?"; add `browser_screenshot` when you need to see the layout, or
 | Tool | Purpose |
 |---|---|
 | `browser_open` | Open a URL in a fresh scenario (headless Chromium, default viewport 390×844 @2x) and report title / HTTP status / visible-text summary / console errors. Without `waitSelector` it waits for the page to render-settle (two identical consecutive visible-text samples, capped at ~3s) before snapshotting, so it never returns the boot/skeleton frame; loading-state noise (`加载中...` etc.) is filtered out of the summary. Optional `waitSelector` waits for a key element before returning, and optional inline `mocks` intercept APIs **before** the first navigation — for pages that boot against mocked data. |
-| `browser_mock` | Register a playwright-glob route (`**/api/*.do*`) returning your JSON, then auto-reload the page to show the mocked state — the quickest way to verify empty / error / abnormal states without touching the backend. Duplicate patterns are rejected with a hint. |
+| `browser_reload` | Reload the current page in place and report the same page state as `browser_open`, **keeping every registered mock**. This is the re-verify call after an edit: it skips the context rebuild, the mock re-registration and the URL round-trip. |
+| `browser_mock` | Register a playwright-glob route (`**/api/*.do*`) returning your JSON, then auto-reload the page to show the mocked state — the quickest way to verify empty / error / abnormal states without touching the backend. Re-registering the same pattern **updates** that route's response instead of stacking a second one. The returned `hits` list shows which requests were actually intercepted, so an empty list means your glob matched nothing — fix the pattern instead of probing variants. |
 | `browser_assert` | The cheapest and most precise check: wait for a CSS selector, verify its count and contained text, return `{pass, count, actualText, elapsedMs}`. A mismatch is `pass:false` (with the diff), never a throw — so failure is a first-class result, not an error you debug. |
 | `browser_screenshot` | Capture the current page (viewport or full page) and **auto-project the image block into the model context** — the model sees the layout without any file handling. Reports dimensions, sha256, and `identicalToPrevious:true` when the shot is byte-identical to the previous one (page probably not refreshed). |
 
@@ -55,7 +56,7 @@ a screenshot is for when the rendering itself must be judged.
 ## Real model experience
 
 > **"Pleasant to use, cleanly layered."** — a real model's verdict, after
-> putting the four tools to work on a real business page.
+> putting these tools to work on a real business page.
 
 - **A three-state verification in 4–5 tool calls, zero environment setup** —
   the same job used to take ~20 manual script steps.
@@ -77,15 +78,27 @@ browser_open  url="…/livingPayment" mocks=[{urlPattern:"**/api/*.do*", json:{s
 browser_assert  selector=".empty-wrap"  text="暂无可用缴费服务"
 browser_screenshot
 
-browser_open  … (same url, mocks with one list item {wegType:"WATER",name:"水费",info:"128.00"})
+browser_mock  urlPattern="**/api/*.do*" json={status:0,result:{list:[{wegType:"WATER",name:"水费",info:"128.00"}],data:{}}}
+        Same pattern → updates that route and reloads: no second open,
+        no URL round-trip, no context rebuild.
 browser_assert  selector=".grid-item"  text="水费"
 browser_screenshot
+```
+
+### Worked example — re-verify after an edit, two calls
+
+The page is open and mocked, only your code changed. `browser_open` would
+rebuild the context and drop every mock; `browser_reload` keeps both:
+
+```
+browser_reload
+browser_assert  selector=".saq-summary__title"  text="该街道已有代理"
 ```
 
 ## Install
 
 ```sh
-dsh plugin --profile web add dsh-browser-verify@0.1.6
+dsh plugin --profile web add dsh-browser-verify@0.1.7
 ```
 
 The version is pinned on purpose: pnpm 11 holds back packages published in the
@@ -121,7 +134,7 @@ used as-is with an "unverified version" hint; without any browser, the first
 |---|---|---|
 | `DSH_BROWSER_VERIFY_CHROMIUM` | *(unset)* | Full path to a Chromium binary; wins over cache probing. If the path is wrong, startup fails with a hint. |
 | `DSH_BROWSER_VERIFY_TIMEOUT` | `10000` | Wall-clock budget (ms) for the page-load path of `browser_open` (including wait-selector and mock reload). |
-| `DSH_BROWSER_VERIFY_IDLE_MS` | `600000` | Idle window (ms) before the browser instance auto-closes; plugin disposal force-cleans in any case. |
+| `DSH_BROWSER_VERIFY_IDLE_MS` | `600000` | Idle window (ms) before the browser instance auto-closes; the next `browser_open` relaunches it lazily. Plugin disposal force-cleans in any case. |
 
 ## Reliability & housekeeping
 

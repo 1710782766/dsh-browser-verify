@@ -7,16 +7,16 @@
 
 **给你的 DeepSeek Harness 一双看网页的眼睛** —— 只读浏览器验证，≤4 次工具调用完成：打开、mock、断言、截图。
 
-每天都在变的页面（H5 轮播、缴费流程、后台控制台）很难靠肉眼验证。本插件让模型通过四个工具驱动一个真实的无头浏览器——打开页面、拦截接口、断言 DOM、截图——截图自动以图片块形式回到模型上下文。不需要终端脚本，不需要打理浏览器：一次验证就是几次工具调用。
+每天都在变的页面（H5 轮播、缴费流程、后台控制台）很难靠肉眼验证。本插件让模型通过五个工具驱动一个真实的无头浏览器——打开页面、原地重载、拦截接口、断言 DOM、截图——截图自动以图片块形式回到模型上下文。不需要终端脚本，不需要打理浏览器：一次验证就是几次工具调用。
 
 ## 快速上手
 
 ```sh
-dsh plugin --profile web add dsh-browser-verify@0.1.6
+dsh plugin --profile web add dsh-browser-verify@0.1.7
 ```
 
 1. **安装**（更多方式见 [安装](#安装)）。
-2. **重启 GUI 一次**——插件在启动时加载，四个工具要在重启后才可见。
+2. **重启 GUI 一次**——插件在启动时加载，工具要在重启后才可见。
 3. **新开会话**，告诉模型——或直接调用：
 
 ```
@@ -37,7 +37,8 @@ browser_assert  selector=".empty-wrap" text="暂无可用缴费服务"
 | 工具                   | 用途                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `browser_open`       | 在全新场景中打开 URL（无头 Chromium，默认视口 390×844 @2x），返回 title / HTTP 状态 / 可见文本摘要 / console 错误。不传`waitSelector` 时默认等待页面**渲染稳定**后再采样（连续两次相同可见文本即稳定，上限约 3s），不会采到启动骨架帧；`加载中...` 等加载态文案自动过滤。可选 `waitSelector` 等待关键元素出现后再返回；可选内联 `mocks` 在**首次导航前**拦截接口——用于一启动就依赖 mock 数据的页面。 |
-| `browser_mock`       | 注册 playwright glob 路由（如`**/api/*.do*`）返回指定 JSON，并自动 reload 页面展示 mock 状态——不碰后端最快验证空态/异常态。重复 pattern 会提示报错。                                                                                                                                                                                                                                                                    |
+| `browser_reload`     | 原地重载当前页面，返回与 `browser_open` 相同的页面状态，**保留已注册的全部 mock**。改完代码后重新验证就用它：省掉上下文重建、mock 重注册与 URL 重传。                                                                                                                                                                                                                                                    |
+| `browser_mock`       | 注册 playwright glob 路由（如`**/api/*.do*`）返回指定 JSON，并自动 reload 页面展示 mock 状态——不碰后端最快验证空态/异常态。同一 pattern 再次注册即**更新**该路由响应（不叠加）。返回的 `hits` 列出本次真正被拦截的请求；`hits` 为空 = 没有请求命中这个 glob，改 glob 写法即可，不必靠换 pattern 试探。                                                                                                                                                |
 | `browser_assert`     | 最省 token 也最精确的验证：等待 CSS 选择器出现，校验数量与包含文本，返回`{pass, count, actualText, elapsedMs}`。不满足时返回 `pass:false`（附差异），**绝不抛错**——失败是一等公民的结果，而不是要调试的异常。                                                                                                                                                                                                   |
 | `browser_screenshot` | 截取当前页面（视口或整页），**自动以 image block 投影到模型上下文**——模型直接"看见"版式，无需任何文件处理。返回尺寸、sha256；与上一张完全一致时 `identicalToPrevious:true`（疑似页面未刷新）。                                                                                                                                                                                                                    |
 
@@ -46,7 +47,7 @@ browser_assert  selector=".empty-wrap" text="暂无可用缴费服务"
 
 ## 真实模型使用体验
 
-> **"好用，层级分明。"** —— 一位真实使用过的大模型的评价：把四件套拿真实的
+> **"好用，层级分明。"** —— 一位真实使用过的大模型的评价：把这套工具拿真实的
 > 业务页面轮了一遍。
 
 - **三态验证 4–5 次工具调用跑完，零环境搭建**——以前同样的事要 ~20 步手动脚本；
@@ -66,15 +67,27 @@ browser_open  url="…/livingPayment" mocks=[{urlPattern:"**/api/*.do*", json:{s
 browser_assert  selector=".empty-wrap"  text="暂无可用缴费服务"
 browser_screenshot
 
-browser_open  …（同 url，mocks 换成一条 {wegType:"WATER",name:"水费",info:"128.00"}）
+browser_mock  urlPattern="**/api/*.do*" json={status:0,result:{list:[{wegType:"WATER",name:"水费",info:"128.00"}],data:{}}}
+        同一 pattern → 更新该路由并自动 reload：不用第二次 open，
+        不用重传 URL，不用重建上下文。
 browser_assert  selector=".grid-item"  text="水费"
 browser_screenshot
+```
+
+### 完整示例——改完代码重新验证，两次调用
+
+页面已经打开、mock 也已就位，只有代码变了。`browser_open` 会重建上下文并
+丢掉所有 mock；`browser_reload` 两者都保留：
+
+```
+browser_reload
+browser_assert  selector=".saq-summary__title"  text="该街道已有代理"
 ```
 
 ## 安装
 
 ```sh
-dsh plugin --profile web add dsh-browser-verify@0.1.6
+dsh plugin --profile web add dsh-browser-verify@0.1.7
 ```
 
 版本故意钉死：pnpm 11 会暂缓 24 小时内新发布的包，裸写 `add dsh-browser-verify`（latest）会在发布当天装到上一个版本。`--profile web`
@@ -106,7 +119,7 @@ npx playwright install chromium
 | ------------------------------- | ------------ | -------------------------------------------------------------------------------- |
 | `DSH_BROWSER_VERIFY_CHROMIUM` | *(未设置)* | Chromium 完整路径；优先于缓存探测。路径错误时启动即报可操作提示。                |
 | `DSH_BROWSER_VERIFY_TIMEOUT`  | `10000`    | `browser_open` 页面加载路径的墙钟预算（ms），含 wait-selector 与 mock reload。 |
-| `DSH_BROWSER_VERIFY_IDLE_MS`  | `600000`   | 空闲回收窗口（ms），超时后浏览器实例自动关闭；插件 dispose 时强制清理。          |
+| `DSH_BROWSER_VERIFY_IDLE_MS`  | `600000`   | 空闲回收窗口（ms），超时后浏览器实例自动关闭（下次 `browser_open` 会自动重启）；插件 dispose 时强制清理。 |
 
 ## 可靠性与清理
 

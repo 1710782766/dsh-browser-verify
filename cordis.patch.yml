@@ -1,7 +1,7 @@
-# dsh-browser-verify bundle patch: registers the four read-only browser
-# verification tools (browser_open / browser_mock / browser_assert /
-# browser_screenshot) in the profile's tool roster. Applied automatically as a
-# profile bundle layer (dsh.bundle.patch in package.json).
+# dsh-browser-verify bundle patch: registers the five read-only browser
+# verification tools (browser_open / browser_reload / browser_mock /
+# browser_assert / browser_screenshot) in the profile's tool roster. Applied
+# automatically as a profile bundle layer (dsh.bundle.patch in package.json).
 #
 # Install: dsh plugin --profile web add dsh-browser-verify@<version>
 # Host half only — no client half, no settings card. Configuration is env-var

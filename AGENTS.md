@@ -4,10 +4,11 @@
 
 ## 项目定位
 
-DeepSeek Harness 宿主插件：给模型四件只读浏览器验证工具（`browser_open` /
-`browser_mock` / `browser_assert` / `browser_screenshot`）+ 精简调试 CLI。
-差异化一句话：**"把网页验证变成几次工具调用"**——单态 ≤4 次、两态 ≤8 次
-是验收线（实测 6 次）；截图自动以 image block 进入模型上下文；零落盘垃圾。
+DeepSeek Harness 宿主插件：给模型五件只读浏览器验证工具（`browser_open` /
+`browser_reload` / `browser_mock` / `browser_assert` / `browser_screenshot`）+
+精简调试 CLI。差异化一句话：**"把网页验证变成几次工具调用"**——单态 ≤4 次、
+两态 ≤8 次是验收线（实测 6 次）；截图自动以 image block 进入模型上下文；
+零落盘垃圾。
 
 与 dsh-llm-vision 的关系：vision 处理"输入图像"，本插件处理"生成图像"
 （projection 方向相反，`read_image` 同款输出机制）。
@@ -21,8 +22,8 @@ DeepSeek Harness 宿主插件：给模型四件只读浏览器验证工具（`br
    这是本插件的核心语义，不许回归。
 3. **错误规范化在 driver 边界**（`wrapError`）：已带前缀的透传，否则包一层
    上下文 + 建议；CLI 与工具共用，禁止在 execute 里重复包裹。
-4. **有界**：可见文本 ≤8 项×40 字符、console 错误 ≤5 条×120 字符、diff 截断
-   120 字符——都是为了少烧 token。
+4. **有界**：可见文本 ≤8 项×40 字符、console 错误 ≤5 条×120 字符、mock 命中
+   ≤5 条×120 字符、diff 截断 120 字符——都是为了少烧 token。
 5. **超时预算**：工具参数 `timeoutMs` 与墙钟 `withTimeout` 必须用同一个值
    （I11 修复后：`args.timeoutMs ?? envTimeoutMs()`）；禁止两套时钟。
 
@@ -40,17 +41,22 @@ DeepSeek Harness 宿主插件：给模型四件只读浏览器验证工具（`br
                             systemBrowserCandidates / resolveCommandOnPath 纯函数可注入
     src/cleanup.ts         纯解析：parseZombiePids（ps 文本→本前缀 pid）、
                             selectOrphanDirs（前缀+超龄+mtime 降序）
-    src/browser/scenario.ts   纯函数（assertNoMockConflict/normalizeCountSpec/isNoiseText/
+    src/browser/scenario.ts   纯函数（formatMockHit/normalizeCountSpec/isNoiseText/
                             summarizeVisibleText/capConsoleErrors/sha256Hex/textDiff）
                             + Scenario 类（page/context/mocks/assert/screenshot 去重；
-                            navigate：未传 waitSelector 时默认等渲染稳定后才采样——
-                            连续两次相同非空可见文本即稳定，间隔 250ms、上限
-                            min(timeoutMs, 3000)，持续变化页则采当前态不抛错；
+                            navigate / reload：未传 waitSelector 时默认等渲染稳定后
+                            才采样——连续两次相同非空可见文本即稳定，间隔 250ms、
+                            上限 min(timeoutMs, 3000)，持续变化页则采当前态不抛错；
+                            console 监听按 page 注册一次、每次加载重置观察窗口；
+                            addMock 同 pattern 覆盖（先 unroute 旧路由，避免两条
+                            route 并存）并记录命中；reload 原地重载、保留全部 mock；
                             summarizeVisibleText 过滤加载态噪音 NOISE_TEXT_PATTERN）
     src/browser/driver.ts    进程内惰性单例（launchPersistentContext + 自管
-                            userDataDir）、单一验证场景、FIFO chain 锁、空闲回收、
-                            disposed 守卫、chained dispose、wrapError、close 失败
-                            时 ps-SIGKILL 兜底（硬杀仅按本实例精确 user-data-dir）
+                            userDataDir）、单一验证场景、FIFO chain 锁、空闲回收
+                            （reclaim 只释放浏览器/scenario 与 temp dir，引擎可再次
+                            懒启动）/ disposed 终态（仅插件卸载）、chained teardown、
+                            wrapError、close 失败时 ps-SIGKILL 兜底
+                            （硬杀仅按本实例精确 user-data-dir）
     src/attachments.ts        saveScreenshot（saveImage + AttachmentError 码表翻译
                             + {cause}）+ screenshotValueFrom（工具返回值的唯一来源：
                             mediaType/bytes/宽高/originalDimensions 全部直通 store ref）
@@ -58,17 +64,27 @@ DeepSeek Harness 宿主插件：给模型四件只读浏览器验证工具（`br
                             satisfies 编译期校验）+ renderScreenshotBlocks（text 信封 +
                             image block，宿主缩放时标注原图尺寸）+ assertImageCapable
                             （模型能力闸门，文本模型引导改用 browser_assert——最省 token）
-    src/tools/index.ts       defineTool 四件套（描述为最终交付文案）；DSH_* env
+    src/tools/index.ts       defineTool 五件套（描述为最终交付文案）；DSH_* env
                             （numberFromEnv 消毒）；每次注册一个 BrowserDriver
     src/tools/timeout.ts     withTimeout（弃赛者不 await）
     src/cli.ts               同核心的免 harness 调试入口（parseCliArgs 纯函数）
 
 - **不变式**：纯函数与 IO 分层——纯函数可单测，IO（浏览器/ps/fs）由 Task 8 冒烟
   与实机闭环验证；scenario 类方法不含可单测新逻辑。
+- **不变式**：空闲回收 ≠ 停止引擎——到期走 `reclaim`（关浏览器/scenario、删 temp
+  dir），引擎保持可用，下次 `browser_open` 懒启动；只有插件卸载才置 `disposed`
+  终态。修复前到期直接 `dispose()`，表现为"静默超过 IDLE_MS 后所有 browser_* 永久
+  报错（连 browser_open 也救不回）"，必须同步 driver.test.ts 的生命周期用例 +
+  实机闭环。
 - **不变式**：每次 `browser_open` = 新 context+page（mock 状态全新）；mocks 必须
   **在首次导航前注册**（browser_open 内联 mocks / driver reset.mocks）——真实应用
   存在"未 mock 时启动即用户登出跳转"（hhhweb status -2 → switchTab），
   open→mock→reload 顺序永远回不到目标页（L10 裁决依据）。
+- **不变式**：`browser_reload` 是"改完代码重新验证"的默认路径——原地重载、保留
+  context 与全部 mock；只有 `browser_open` 重建场景（mock 全新）。同 pattern 的
+  `browser_mock` 覆盖旧路由（先 unroute，绝不让两条 route 并存），并返回 hits
+  （本次实际被拦截的请求，≤5 条）——模型据此判断 glob 是否命中，不必换 pattern
+  试探、也不必重开页面来清空 mock（真实会话里 29 次 open 有 26 次是这种重建税）。
 - **不变式**：落盘点仅三处——`os.tmpdir()/dsh-browser-verify-<pid>/`（会话生命周期）、
   DSH 附件库（文档化生命周期）、CLI `--persist` 显式路径；报告/日志一律不落盘。
 
@@ -85,7 +101,7 @@ DeepSeek Harness 宿主插件：给模型四件只读浏览器验证工具（`br
 - **DSH peer 区间决定插件能否被装载（0.2.0-rc.1 告警的根因）**：app-boot 对
   `peerDependencies` 里每个 `@deepseek-ai/dsh` / `@deepseek-ai/dsh-*` 跑
   `semver.satisfies(runtime, range, { includePrerelease: true })`，不满足即在整个
-  profile 启动时**拒绝装载**（插件仍装着，但四件套工具从会话里消失），直到用户
+  profile 启动时**拒绝装载**（插件仍装着，但工具从会话里消失），直到用户
   用 `dsh plugin allow-version <pkg>@<ver> --dsh-version <runtime> --accept-risk`
   授权**精确版本**豁免。`^0.1.2-alpha.4` 按 0.x 语义上限是 `<0.2.0`，所以宿主跨
   0.1→0.2 时**必然**报警——区间必须显式跨线（现为

@@ -80,8 +80,40 @@ export function registerBrowserTools(ctx: Context): void {
   }))
 
   ctx.tools.register(defineTool({
+    name: 'browser_reload',
+    description: '重新加载当前页面并返回与 browser_open 相同的页面状态，保留已注册的接口拦截。改完代码后重新验证优先用它：比 browser_open 更快、不丢 mock、不用重传 URL。未打开页面时请先 browser_open。',
+    parameters: {
+      waitSelector: { type: 'string', description: '可选：等待该选择器出现后再返回；不传则自动等待页面渲染稳定后返回' },
+      timeoutMs: { type: 'number', description: `加载超时，默认 ${envTimeoutMs()}ms` },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          title: { type: 'string', required: true },
+          url: { type: 'string', required: true },
+          status: { oneOf: [{ type: 'number' }, { type: 'null' }], required: true },
+          visible: { type: 'array', items: { type: 'string' }, required: true },
+          consoleErrors: { type: 'array', items: { type: 'string' }, required: true },
+          elapsedMs: { type: 'number', required: true },
+          mockHits: { type: 'array', items: { type: 'string' }, required: true, description: '本次加载中被 mock 拦截的请求（pattern ← url，最多 5 条）' },
+        },
+      },
+      render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
+    },
+    async execute(args) {
+      const timeoutMs = args.timeoutMs ?? envTimeoutMs()
+      return withTimeout(
+        driver.reloadScenario({ waitSelector: args.waitSelector, timeoutMs }),
+        timeoutMs, 'browser_reload',
+      )
+    },
+  }))
+
+  ctx.tools.register(defineTool({
     name: 'browser_mock',
-    description: '为当前验证场景注册接口拦截并自动重新加载页面：urlPattern 用 playwright glob（如 **/api/lifeIndex.do*），拦截后返回指定 json，用于 mock 空态/异常态。与已注册 pattern 完全相同时报错；请先 browser_open。',
+    description: '注册接口拦截并自动重新加载页面：urlPattern 用 playwright glob（如 **/api/lifeIndex.do*），拦截后返回指定 json，用于 mock 空态/异常态。同一 pattern 再次注册 = 更新该接口的响应（不叠加）。返回的 hits 是本次实际拦截到的请求；hits 为空说明没有请求命中这个 glob（检查写法），不必换 pattern 重试。请先 browser_open。',
     parameters: {
       urlPattern: { type: 'string', required: true, description: 'glob 模式，如 **/api/lifeIndex.do*' },
       json: { type: 'json', description: '拦截响应体（任意 JSON）', required: true },
@@ -94,12 +126,14 @@ export function registerBrowserTools(ctx: Context): void {
         additionalProperties: false,
         properties: {
           patterns: { type: 'array', items: { type: 'string' }, required: true },
+          updated: { type: 'boolean', required: true, description: 'true=本次更新了已存在的 pattern（覆盖其响应）' },
+          hits: { type: 'array', items: { type: 'string' }, required: true, description: '本次实际拦截到的请求（pattern ← url，最多 5 条）；空数组=没有请求命中该 pattern' },
         },
       },
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
     },
     async execute(args) {
-      return driver.withScenario(async scenario => ({ patterns: await scenario.addMock({ urlPattern: args.urlPattern, json: args.json, status: args.status, reload: args.reload, timeoutMs: envTimeoutMs() }) }))
+      return driver.withScenario(scenario => scenario.addMock({ urlPattern: args.urlPattern, json: args.json, status: args.status, reload: args.reload, timeoutMs: envTimeoutMs() }))
     },
   }))
 

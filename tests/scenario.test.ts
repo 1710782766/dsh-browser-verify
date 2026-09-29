@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { assertNoMockConflict, capConsoleErrors, isNoiseText, normalizeCountSpec, sha256Hex, summarizeVisibleText, textDiff } from '../src/browser/scenario.ts'
+import { capConsoleErrors, formatMockHit, isNoiseText, normalizeCountSpec, sha256Hex, summarizeVisibleText, textDiff } from '../src/browser/scenario.ts'
 
 describe('scenario pure helpers', () => {
-  it('rejects duplicate mock patterns with actionable message', () => {
-    expect(() => assertNoMockConflict(['**/api/a*'], '**/api/a*')).toThrow(/已存在/)
-    expect(() => assertNoMockConflict(['**/api/a*'], '**/api/b*')).not.toThrow()
+  it('formats mock hits as pattern ← url, bounded to 120 chars', () => {
+    expect(formatMockHit('**/api/a.do*', 'http://x/api/a.do?uid=1')).toBe('**/api/a.do* ← http://x/api/a.do?uid=1')
+    const long = formatMockHit('**/p*', `http://x/${'z'.repeat(200)}`)
+    expect(long).toHaveLength(120)
+    expect(long.endsWith('…')).toBe(true)
   })
 
   it('normalizes count specs', () => {

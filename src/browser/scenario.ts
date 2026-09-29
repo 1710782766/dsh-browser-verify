@@ -13,6 +13,14 @@ export interface MockRule {
   status: number
 }
 
+export interface MockResult {
+  patterns: string[]
+  /** True when this call replaced an existing rule for the same pattern. */
+  updated: boolean
+  /** Requests intercepted since this call started (pattern ← url), bounded. */
+  hits: string[]
+}
+
 export interface OpenResult {
   title: string
   url: string
@@ -34,6 +42,9 @@ const MAX_VISIBLE_LEN = 40
 const MAX_ERRORS = 5
 const MAX_ERROR_LEN = 120
 const MAX_DIFF_LEN = 120
+/** Mock-hit lines stay bounded too: 5 entries of 120 chars. */
+const MAX_MOCK_HITS = 5
+const MAX_HIT_LEN = 120
 /** Poll interval and cap for the default render-settled wait (no waitSelector). */
 const SETTLE_INTERVAL_MS = 250
 const SETTLE_CAP_MS = 3000
@@ -49,10 +60,14 @@ export function isNoiseText(text: string): boolean {
   return NOISE_TEXT_PATTERN.test(text)
 }
 
-export function assertNoMockConflict(patterns: string[], next: string): void {
-  if (patterns.includes(next)) {
-    throw new Error(`browser-verify: 拦截 pattern 已存在: ${next}（已有: ${patterns.join(', ')}）。请先 browser_open 重开场景或用不同的 urlPattern。`)
-  }
+/**
+ * One mock-hit line, bounded for token economy. Reading it tells the model
+ * whether its pattern actually matched a request — the answer it used to have
+ * to guess (probe patterns, re-assert the page, reopen to reset state).
+ */
+export function formatMockHit(pattern: string, url: string): string {
+  const line = `${pattern} ← ${url}`
+  return line.length > MAX_HIT_LEN ? `${line.slice(0, MAX_HIT_LEN - 1)}…` : line
 }
 
 export function normalizeCountSpec(count: number | { min: number; max: number } | undefined): { min: number; max: number } | null {
@@ -104,37 +119,91 @@ Array.from(document.querySelectorAll('body *')).map(el => {
 export class Scenario {
   readonly mocks = new Map<string, MockRule>()
   lastScreenshotHash: string | null = null
+  /** Console errors of the current load only (reset per navigate/reload). */
+  private consoleErrors: string[] = []
+  /** Mock hits observed during the current load window, tagged by rule. */
+  private mockHits: Array<{ pattern: string; line: string }> = []
 
   constructor(
     readonly page: Page,
     readonly context: BrowserContext,
-  ) {}
+  ) {
+    // Listeners are registered once per page: navigate/reload reuse the same
+    // scenario, and re-registering per call would multiply every console error.
+    page.on('console', msg => { if (msg.type() === 'error') this.consoleErrors.push(msg.text()) })
+    page.on('pageerror', err => this.consoleErrors.push(String(err)))
+  }
 
-  async navigate(opts: { url: string; waitSelector?: string; timeoutMs?: number }): Promise<OpenResult> {
-    const started = Date.now()
-    const timeout = opts.timeoutMs ?? 10000
-    const errors: string[] = []
-    const onError = (message: string): void => { errors.push(message) }
-    this.page.on('console', msg => { if (msg.type() === 'error') onError(msg.text()) })
-    this.page.on('pageerror', err => onError(String(err)))
-    const response = await this.page.goto(opts.url, { waitUntil: 'domcontentloaded', timeout })
-    if (opts.waitSelector !== undefined) {
-      await this.page.waitForSelector(opts.waitSelector, { timeout })
-    } else {
-      // No explicit selector: wait for the page to render-settle instead of
-      // snapshotting the boot frame (SPAs like uni-app show skeleton/loading
-      // right after domcontentloaded — a 500ms snapshot reads empty).
-      await this.waitUntilRendered(timeout)
+  /** Start a fresh observation window: per-load errors and mock hits. */
+  private beginLoadWindow(): void {
+    this.consoleErrors = []
+    this.mockHits = []
+  }
+
+  private recordMockHit(pattern: string, url: string): void {
+    const line = formatMockHit(pattern, url)
+    if (this.mockHits.some(hit => hit.line === line)) return
+    if (this.mockHits.length >= MAX_MOCK_HITS) return
+    this.mockHits.push({ pattern, line })
+  }
+
+  /**
+   * Hits intercepted during the current load window (bounded copy). Pass a
+   * pattern to report only that rule's hits: a `browser_mock` call must answer
+   * "did MY glob match anything", not list a neighbouring rule's traffic —
+   * otherwise a wrong glob looks like a working one.
+   */
+  mockHitList(pattern?: string): string[] {
+    return this.mockHits
+      .filter(hit => pattern === undefined || hit.pattern === pattern)
+      .map(hit => hit.line)
+  }
+
+  /** Load-wait shared by navigate/reload: explicit selector, else render settle. */
+  private async settle(waitSelector: string | undefined, timeout: number): Promise<void> {
+    if (waitSelector !== undefined) {
+      await this.page.waitForSelector(waitSelector, { timeout })
+      return
     }
+    // No explicit selector: wait for the page to render-settle instead of
+    // snapshotting the boot frame (SPAs like uni-app show skeleton/loading
+    // right after domcontentloaded — a 500ms snapshot reads empty).
+    await this.waitUntilRendered(timeout)
+  }
+
+  private async snapshot(started: number, status: number | null): Promise<OpenResult> {
     const texts = await this.page.evaluate(VISIBLE_TEXT_SCRIPT) as string[]
     return {
       title: await this.page.title(),
       url: this.page.url(),
-      status: response?.status() ?? null,
+      status,
       visible: summarizeVisibleText(texts),
-      consoleErrors: capConsoleErrors(errors),
+      consoleErrors: capConsoleErrors(this.consoleErrors),
       elapsedMs: Date.now() - started,
     }
+  }
+
+  async navigate(opts: { url: string; waitSelector?: string; timeoutMs?: number }): Promise<OpenResult> {
+    const started = Date.now()
+    const timeout = opts.timeoutMs ?? 10000
+    this.beginLoadWindow()
+    const response = await this.page.goto(opts.url, { waitUntil: 'domcontentloaded', timeout })
+    await this.settle(opts.waitSelector, timeout)
+    return this.snapshot(started, response?.status() ?? null)
+  }
+
+  /**
+   * Reload the current page in place: same context, same registered mocks.
+   * The cheap path for "code changed, re-verify" — a full browser_open would
+   * rebuild the context and drop every mock (forcing a re-register round trip).
+   */
+  async reload(opts: { waitSelector?: string; timeoutMs?: number } = {}): Promise<OpenResult> {
+    const started = Date.now()
+    const timeout = opts.timeoutMs ?? 10000
+    this.beginLoadWindow()
+    const response = await this.page.reload({ waitUntil: 'domcontentloaded', timeout })
+    await this.settle(opts.waitSelector, timeout)
+    return this.snapshot(started, response?.status() ?? null)
   }
 
   /**
@@ -158,18 +227,35 @@ export class Scenario {
     }
   }
 
-  async addMock(rule: { urlPattern: string; json: unknown; status?: number; reload?: boolean; timeoutMs?: number }): Promise<string[]> {
-    assertNoMockConflict([...this.mocks.keys()], rule.urlPattern)
+  /**
+   * Register or update a request mock. Re-registering the same pattern replaces
+   * the previous rule (json + status) instead of stacking a second Playwright
+   * route: the model could not tell which of two overlapping rules won, so it
+   * reopened the page to clear them — the expensive habit this removes.
+   */
+  async addMock(rule: { urlPattern: string; json: unknown; status?: number; reload?: boolean; timeoutMs?: number }): Promise<MockResult> {
     const status = rule.status ?? 200
+    const updated = this.mocks.has(rule.urlPattern)
+    if (updated) {
+      await this.context.unroute(rule.urlPattern).catch(() => undefined)
+    }
     this.mocks.set(rule.urlPattern, { json: rule.json, status })
     await this.context.route(rule.urlPattern, async route => {
-      const body = Buffer.from(JSON.stringify(this.mocks.get(rule.urlPattern)?.json ?? rule.json))
-      await route.fulfill({ status, body, contentType: 'application/json; charset=utf-8' })
+      const current = this.mocks.get(rule.urlPattern) ?? { json: rule.json, status }
+      this.recordMockHit(rule.urlPattern, route.request().url())
+      const body = Buffer.from(JSON.stringify(current.json))
+      await route.fulfill({ status: current.status, body, contentType: 'application/json; charset=utf-8' })
     })
+    this.beginLoadWindow()
     if (rule.reload !== false) {
-      await this.page.reload({ waitUntil: 'domcontentloaded', timeout: rule.timeoutMs ?? 10000 })
+      const timeout = rule.timeoutMs ?? 10000
+      await this.page.reload({ waitUntil: 'domcontentloaded', timeout })
+      // Settle before reporting hits: an SPA fires its boot requests only after
+      // the bundle runs, so a bare domcontentloaded would report an empty hit
+      // list for a mock that is in fact working.
+      await this.settle(undefined, timeout)
     }
-    return [...this.mocks.keys()]
+    return { patterns: [...this.mocks.keys()], updated, hits: this.mockHitList(rule.urlPattern) }
   }
 
   async assert(opts: { selector: string; count?: number | { min: number; max: number }; text?: string; timeoutMs: number }): Promise<AssertResult> {
