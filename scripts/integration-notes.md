@@ -132,3 +132,42 @@ dsh plugin --profile web add dsh-browser-verify@0.1.5   # profile 钉扎 0.1.5�
   若要截图 GUI 本身须传 `dsh web` 打印的带 token URL。
 - 事故场景已从"必死"变为"正常降级并自述原图尺寸"，且验证发生在**已发布产物**而非
   本地构建上（本地构建闭环见上一节）。
+
+## 0.1.6 上线复验 — 宿主跨 0.1→0.2 装载 + 真宿主两态闭环 ✅
+
+宿主升级到 dsh 0.2.0-rc.1 后，0.1.5 在 profile 启动时被**拒绝装载**（包仍装着，四件套
+从会话工具目录消失）。根因不是代码不兼容，而是 `peerDependencies` 的 caret 上限：
+`^0.1.2-alpha.4` 在 0.x 语义下是 `<0.2.0`，而 app-boot 对每个 `@deepseek-ai/dsh-*` peer
+跑 `semver.satisfies(runtime, range, { includePrerelease: true })`，宿主跨线必然不满足。
+0.1.6 把区间改为 `>=0.1.2-alpha.4 <0.3.0`（同时覆盖两线）、devDeps 对齐 `^0.2.0-rc.1`；
+**源码零改动**——`lib/index.js` / `lib/cli.js` 与 0.1.5 已发布产物 sha256 完全一致
+（`babccef56b7d3fd2` / `44f0ff8659d2f949`）。
+
+契约实测（对齐 0.2.0-rc.1）：
+
+| 项 | 结果 |
+|---|---|
+| `packages/tools`（0.1.7-rc.2→0.2.0-rc.1） | 零提交；attachment 仅 package.json 版本号变化 |
+| typecheck / 单测 / 覆盖率闸门 | 0 错误 / 49 通过 / 97.6·100·100 |
+| 线上 tarball 三方一致 | registry `dist.shasum` = 发布前 dry-run 值 = 实测 SHA-1 `3467dfa576f49382b37c4c41c359b667ad952412` |
+| 宿主判定函数（runtime 0.2.0-rc.1） | 0.1.5 逐字复现拒绝原文；0.1.6 返回 `undefined`（不拒绝） |
+
+用户按 registry 安装 0.1.6 + 重启宿主后，四件套重新出现在会话工具目录，**无需任何豁免**；
+随后在全新会话跑真宿主两态闭环（6 次调用，验收线 ≤8）：
+
+```bash
+dsh plugin --profile web add dsh-browser-verify@0.1.6
+```
+
+| 状态 | browser_open | browser_assert | browser_screenshot |
+|---|---|---|---|
+| 空态 | 200 / 708ms / 零 console 错误 / `browserKnown:true` | `.empty-wrap` → `pass:true` count=1 | `image/png, 780x1688 px, 37143 bytes, sha256 44c54a89825f` |
+| 正常态 | 200 / 576ms / 零 console 错误 | `.grid-item` → `pass:true` count=1 `水费查看详情128.00` | `image/png, 780x1688 px, 36878 bytes, sha256 e128666c2273` |
+
+- 正常态截图 sha 与本地 `scripts/smoke.sh`（CLI 路径）逐位一致 → harness 工具路径与 CLI
+  路径渲染同一结果；空态 sha 不同（空态插画淡入时序），两者均无 `ATTACHMENT_CORRUPT`。
+- 浏览器走 `chromium_headless_shell-1234`（`KNOWN_REVISIONS` 认证的 1234↔1.62.x 路径）。
+- tmpdir 内仅 `dsh-browser-verify-<宿主pid>`（1.8M，浏览器 profile），空闲 10 min 由 driver
+  回收；截图自动投影为 image block，信封格式/尺寸与 store ref 逐项一致。
+- profile 侧事实：安装失败时（0.1.6 尚未发布时误发 `add`）profile 清单与 lockfile 已按
+  registry 预检拒绝并**原样回滚**（仍钉 0.1.5、bundle 列表未变、无 compatibility.json）。

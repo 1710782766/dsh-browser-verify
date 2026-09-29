@@ -145,11 +145,12 @@ used as-is with an "unverified version" hint; without any browser, the first
 
 49 unit tests (fully offline — no browser needed), strict typecheck, and a
 per-file ≥90% statement coverage gate. Verified **end-to-end in the real DSH
-web GUI** on dsh 0.1.2-alpha.4: a two-state loop (empty + normal) against a
-live uni-app H5 (hhhweb) in 6 tool calls, with screenshots auto-projected and
-zero leftover temp dirs or zombie processes. The host contract was re-verified
-against **dsh 0.2.0-rc.1** (typecheck, the full offline suite, and the packed
-build).
+web GUI** on both **dsh 0.1.2-alpha.4** and **dsh 0.2.0-rc.1**: a two-state loop
+(empty + normal) against a live uni-app H5 (hhhweb) in 6 tool calls, with
+screenshots auto-projected and zero leftover temp dirs or zombie processes. The
+0.2.0-rc.1 run used the published release (`dsh plugin add` from the registry,
+no version exemption) and was backed by typecheck, the full offline suite, and
+the packed build on that host line.
 
 ## Known limitations
 
