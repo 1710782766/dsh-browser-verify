@@ -78,10 +78,25 @@ DeepSeek Harness 宿主插件：给模型四件只读浏览器验证工具（`br
   （本机缓存实证）；升级必须同步：package.json、KNOWN_REVISIONS 认证表、
   README ×2 的 `npx playwright install chromium` 注记、本文件。
 - dsh 侧 devDeps（dsh-tools / dsh-attachment / dsh-llm）**对齐当前宿主版本**
-  （现为 `^0.1.2-alpha.4`）；cordis ^4.0.1。宿主升级后必须 `pnpm install` +
+  （现为 `^0.2.0-rc.1`）；cordis ^4.0.1。宿主升级后必须 `pnpm install` +
   typecheck 验证契约（注意：defineTool 的 `parameters` 是**编译后 JSON Schema**、
   `output.render` 为必填——rc.8 起；新增参数节点必须带显式 `type` 与
   `additionalProperties`，否则 defineTool 注册即抛错）。
+- **DSH peer 区间决定插件能否被装载（0.2.0-rc.1 告警的根因）**：app-boot 对
+  `peerDependencies` 里每个 `@deepseek-ai/dsh` / `@deepseek-ai/dsh-*` 跑
+  `semver.satisfies(runtime, range, { includePrerelease: true })`，不满足即在整个
+  profile 启动时**拒绝装载**（插件仍装着，但四件套工具从会话里消失），直到用户
+  用 `dsh plugin allow-version <pkg>@<ver> --dsh-version <runtime> --accept-risk`
+  授权**精确版本**豁免。`^0.1.2-alpha.4` 按 0.x 语义上限是 `<0.2.0`，所以宿主跨
+  0.1→0.2 时**必然**报警——区间必须显式跨线（现为
+  `>=0.1.2-alpha.4 <0.3.0`，同时覆盖 0.1.x / 0.2.x）。跨线前必须先验证契约真的没变
+  （`packages/tools` 在 0.1.7-rc.2→0.2.0-rc.1 零改动，但仍要实测）。
+- **pnpm 升级宿主后 `pnpm <script>` 可能整体失败（供应链策略）**：本项目
+  `minimumReleaseAgeExclude` 是逐个 `name@version` 的白名单，而 pnpm 的
+  `evaluateVersionPolicy` 对同名包**只取第一条匹配规则**——老的
+  `@x@0.1.2-alpha.4` 排在前会把新的 `@x@0.2.0-rc.1` 吞掉，表现为
+  `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION` + `pnpm run` 全线失败。同名必须合并成
+  一条版本并集（`'@deepseek-ai/dsh-tools@0.1.2-alpha.4 || 0.2.0-rc.1'`）。
 - **运行时 import 的宿主包必须同时声明在 peerDependencies 与
   devDependencies**（对照生态 dsh-context / dshmarket：dependencies 只放
   第三方，`@deepseek-ai/*` 一律 peer；0.1.1 的教训——只放 devDependencies，

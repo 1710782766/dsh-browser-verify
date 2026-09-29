@@ -18,7 +18,7 @@ verification is just tool calls.
 ## Quick start
 
 ```sh
-dsh plugin --profile web add dsh-browser-verify@0.1.5
+dsh plugin --profile web add dsh-browser-verify@0.1.6
 ```
 
 1. **Install** with the command above (or see [Install](#install)).
@@ -85,7 +85,7 @@ browser_screenshot
 ## Install
 
 ```sh
-dsh plugin --profile web add dsh-browser-verify@0.1.5
+dsh plugin --profile web add dsh-browser-verify@0.1.6
 ```
 
 The version is pinned on purpose: pnpm 11 holds back packages published in the
@@ -93,7 +93,9 @@ last 24 hours, so a bare `add dsh-browser-verify` (latest) would silently
 install the previous release on launch day. `--profile web` is the GUI profile
 of this deployment — use your own profile name if it differs.
 
-Requires **dsh ≥ 0.1.2-alpha.1**.
+Requires **dsh ≥ 0.1.2-alpha.1**, on either host line: the declared DSH peer
+range spans `0.1.x` and `0.2.x`. A dsh runtime outside it refuses to load the
+plugin at profile startup until you grant an exact-version exemption.
 
 ### Browser prerequisite (usually none)
 
@@ -141,11 +143,13 @@ used as-is with an "unverified version" hint; without any browser, the first
 
 ## Testing status
 
-41 unit tests (fully offline — no browser needed), strict typecheck, and a
+49 unit tests (fully offline — no browser needed), strict typecheck, and a
 per-file ≥90% statement coverage gate. Verified **end-to-end in the real DSH
 web GUI** on dsh 0.1.2-alpha.4: a two-state loop (empty + normal) against a
 live uni-app H5 (hhhweb) in 6 tool calls, with screenshots auto-projected and
-zero leftover temp dirs or zombie processes.
+zero leftover temp dirs or zombie processes. The host contract was re-verified
+against **dsh 0.2.0-rc.1** (typecheck, the full offline suite, and the packed
+build).
 
 ## Known limitations
 

@@ -12,7 +12,7 @@
 ## 快速上手
 
 ```sh
-dsh plugin --profile web add dsh-browser-verify@0.1.5
+dsh plugin --profile web add dsh-browser-verify@0.1.6
 ```
 
 1. **安装**（更多方式见 [安装](#安装)）。
@@ -74,13 +74,15 @@ browser_screenshot
 ## 安装
 
 ```sh
-dsh plugin --profile web add dsh-browser-verify@0.1.5
+dsh plugin --profile web add dsh-browser-verify@0.1.6
 ```
 
 版本故意钉死：pnpm 11 会暂缓 24 小时内新发布的包，裸写 `add dsh-browser-verify`（latest）会在发布当天装到上一个版本。`--profile web`
 是本部署的 GUI profile——如果不同请换成你自己的 profile 名。
 
-要求 **dsh ≥ 0.1.2-alpha.1**。
+要求 **dsh ≥ 0.1.2-alpha.1**，`0.1.x` 与 `0.2.x` 两条宿主线均支持（声明的 DSH
+peer 区间同时覆盖两线）。超出该区间的 dsh 运行时会在 profile 启动时拒绝装载本插件，
+除非你为该精确版本授予豁免。
 
 ### 浏览器前置（通常无需）
 
@@ -119,7 +121,7 @@ npx playwright install chromium
 
 ## 测试状态
 
-41 个单测（完全离线，无需浏览器）、严格 typecheck、每文件 ≥90% 语句覆盖率闸门。已在 **dsh 0.1.2-alpha.4 真实 GUI 端到端验证**：对一个真实 uni-app H5（hhhweb），空态+正常态两态闭环共 6 次调用，截图自动投影，无临时目录残留、无僵尸进程。
+49 个单测（完全离线，无需浏览器）、严格 typecheck、每文件 ≥90% 语句覆盖率闸门。已在 **dsh 0.1.2-alpha.4 真实 GUI 端到端验证**：对一个真实 uni-app H5（hhhweb），空态+正常态两态闭环共 6 次调用，截图自动投影，无临时目录残留、无僵尸进程。宿主契约已在 **dsh 0.2.0-rc.1** 上复验（typecheck、全量离线测试、打包产物）。
 
 ## 已知限制
 
